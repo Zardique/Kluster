@@ -1,0 +1,78 @@
+.game-board-3d {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.game-board-3d canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 3D controls hint */
+.controls-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.3s;
+}
+
+.game-board-3d:hover .controls-hint {
+  opacity: 1;
+}
+
+/* Loading indicator */
+.loading-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #FF8C00;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+/* 3D stone styles */
+.stone-3d {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.stone-3d:hover {
+  transform: scale(1.05);
+}
+
+/* Animation for clustered stones */
+@keyframes pulse3D {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.clustered-3d {
+  animation: pulse3D 0.8s ease-in-out forwards;
+}
+
+/* Isometric view styles */
+.isometric-view {
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+/* Board grid pattern */
+.board-grid {
+  background-image: 
+    linear-gradient(to right, rgba(200, 200, 200, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(200, 200, 200, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+} 
