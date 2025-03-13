@@ -17,7 +17,7 @@ const STONE_HEIGHT = 8;
 const PLAY_AREA_RADIUS = 250;
 const MAGNETIC_FORCE_DISTANCE = 180;
 const MAGNETIC_FORCE_MULTIPLIER = 120;
-const CLUSTER_THRESHOLD = 100; // Decreased from 150 to make clustering less aggressive
+const CLUSTER_THRESHOLD = 80; // Decreased to make clustering more reliable
 const ANIMATION_DURATION = 800; // ms
 
 // Player colors for the board border
@@ -37,6 +37,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [clusteredStones, setClusteredStones] = useState<Stone[]>([]);
   const [nearClusterStones, setNearClusterStones] = useState<Stone[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [lastClusterCheck, setLastClusterCheck] = useState(0);
 
   // Calculate magnetic strength between two stones
   const calculateMagneticStrength = (stone1: Stone, stone2: Stone) => {
@@ -51,12 +52,24 @@ const GameBoard: React.FC<GameBoardProps> = ({
     // Using a less steep curve for more gradual effect
     let strength = Math.pow(normalizedDistance, 1.5) * MAGNETIC_FORCE_MULTIPLIER;
     
+    // Increase strength for stones on edge to make them more likely to cluster
+    if (stone1.onEdge && stone2.onEdge) {
+      strength *= 1.5;
+    } else if (stone1.onEdge || stone2.onEdge) {
+      strength *= 1.2;
+    }
+    
     return strength;
   };
 
   // Check if stones form a cluster
   const checkClustering = () => {
     if (isAnimating || stones.length < 2) return;
+    
+    // Throttle cluster checking to avoid excessive checks
+    const now = Date.now();
+    if (now - lastClusterCheck < 300) return; // Check at most every 300ms
+    setLastClusterCheck(now);
     
     // Build a graph of connected stones
     const graph: Record<number, number[]> = {};
@@ -70,13 +83,21 @@ const GameBoard: React.FC<GameBoardProps> = ({
           const dy = stone.y - otherStone.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
+          // Adjust threshold based on whether stones are on edge
+          let adjustedThreshold = CLUSTER_THRESHOLD;
+          if (stone.onEdge && otherStone.onEdge) {
+            adjustedThreshold *= 1.2; // Increase threshold for edge-to-edge
+          } else if (stone.onEdge || otherStone.onEdge) {
+            adjustedThreshold *= 1.1; // Slightly increase for edge-to-flat
+          }
+          
           // Check for near-clustering stones (within 30% of threshold)
-          if (distance < CLUSTER_THRESHOLD * 1.3 && distance >= CLUSTER_THRESHOLD) {
+          if (distance < adjustedThreshold * 1.3 && distance >= adjustedThreshold) {
             nearClusterIndices.add(i);
             nearClusterIndices.add(j);
           }
           
-          if (distance < CLUSTER_THRESHOLD) {
+          if (distance < adjustedThreshold) {
             graph[i].push(j);
           }
         }
@@ -117,6 +138,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (clusters.length > 0) {
       const clusteredStoneIndices = clusters.flat();
       const clusteredStonesArray = clusteredStoneIndices.map(index => stones[index]);
+      
+      console.log('Cluster detected:', clusteredStonesArray.map(s => s.id));
       
       setClusteredStones(clusteredStonesArray);
       setIsAnimating(true);

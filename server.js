@@ -174,7 +174,11 @@ io.on('connection', (socket) => {
       const room = gameRooms.get(roomId);
       if (room) {
         room.lastActivity = Date.now();
-        io.to(roomId).emit('stones_clustered', { clusteredStones });
+        
+        console.log(`Cluster occurred in room ${roomId}, ${clusteredStones.length} stones clustered`);
+        
+        // Broadcast to all clients EXCEPT the sender
+        socket.to(roomId).emit('stones_clustered', { clusteredStones });
       }
     } catch (error) {
       console.error('Error handling cluster:', error);

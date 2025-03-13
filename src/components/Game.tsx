@@ -27,6 +27,7 @@ const Game: React.FC = () => {
   const [winner, setWinner] = useState<number | null>(null);
   const [lastPlacedStoneId, setLastPlacedStoneId] = useState<string | null>(null);
   const [showLobby, setShowLobby] = useState(true);
+  const [processingCluster, setProcessingCluster] = useState(false);
   
   // Get multiplayer context
   const {
@@ -54,8 +55,12 @@ const Game: React.FC = () => {
     });
     
     socket.on('stones_clustered', (data: { clusteredStones: Stone[] }) => {
-      // Handle clustering event
-      handleCluster(data.clusteredStones);
+      console.log('Received stones_clustered event:', data.clusteredStones);
+      // Only process if we're not already processing a cluster
+      // and if the event wasn't triggered by us
+      if (!processingCluster) {
+        handleCluster(data.clusteredStones, true);
+      }
     });
     
     socket.on('game_state_updated', (data: { gameState: any }) => {
@@ -85,7 +90,7 @@ const Game: React.FC = () => {
       socket.off('game_ended');
       socket.off('rematch_accepted');
     };
-  }, [socket, playerId]);
+  }, [socket, playerId, processingCluster]);
   
   // Handle stone placement
   const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
@@ -96,46 +101,47 @@ const Game: React.FC = () => {
     
     // Create a new stone
     const newStone: Stone = {
-      id: `stone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `stone_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       x,
       y,
       radius: STONE_RADIUS,
       height: STONE_HEIGHT,
       player: players[currentPlayer],
       clustered: false,
-      onEdge: false // Always flat placement
+      onEdge: Math.random() > 0.5 // 50% chance of being on edge
     };
     
-    // Add the stone to the game
+    // Add the stone to the board
     setStones(prevStones => [...prevStones, newStone]);
-    
-    // Store the ID of the last placed stone
     setLastPlacedStoneId(newStone.id);
     
-    // Update player's stones left
+    // Update the current player's stones left
     setPlayers(prevPlayers => {
       const updatedPlayers = [...prevPlayers];
       updatedPlayers[currentPlayer] = {
         ...updatedPlayers[currentPlayer],
         stonesLeft: updatedPlayers[currentPlayer].stonesLeft - 1
       };
-      
-      // Check if the player has won
-      if (updatedPlayers[currentPlayer].stonesLeft === 0) {
-        setGameOver(true);
-        setWinner(currentPlayer);
-        
-        // Notify other players about game over
-        if (!fromServer && playerId !== null) {
-          notifyGameOver(currentPlayer);
-        }
-      }
-      
       return updatedPlayers;
     });
     
-    // Change the turn
+    // Switch to the next player
     setCurrentPlayer(prevPlayer => (prevPlayer + 1) % players.length);
+    
+    // Check if the game is over
+    const nextPlayer = (currentPlayer + 1) % players.length;
+    if (players[nextPlayer].stonesLeft === 0) {
+      setGameOver(true);
+      
+      // Determine the winner (player with more stones left)
+      const winner = players[0].stonesLeft > players[1].stonesLeft ? 0 : 1;
+      setWinner(winner);
+      
+      // Notify other players about the game over
+      if (playerId !== null && isInRoom) {
+        notifyGameOver(winner);
+      }
+    }
     
     // If this is our move, emit it to the server
     if (!fromServer && playerId !== null && isInRoom) {
@@ -161,8 +167,13 @@ const Game: React.FC = () => {
   }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, updateGameState, notifyGameOver, gameOver, winner]);
   
   // Handle clustered stones
-  const handleCluster = useCallback((clusteredStones: Stone[]) => {
+  const handleCluster = useCallback((clusteredStones: Stone[], fromServer = false) => {
     if (clusteredStones.length === 0) return;
+    
+    console.log('Handling cluster:', clusteredStones, 'fromServer:', fromServer);
+    
+    // Set processing flag to prevent duplicate processing
+    setProcessingCluster(true);
     
     // Find the player who placed the last stone
     const lastPlayerIndex = currentPlayer === 0 ? 1 : 0; // Previous player
@@ -172,7 +183,7 @@ const Game: React.FC = () => {
     
     // Remove clustered stones from the board
     setStones(prevStones => 
-      prevStones.filter(stone => !clusteredStones.includes(stone))
+      prevStones.filter(stone => !clusteredStones.some(cs => cs.id === stone.id))
     );
     
     // Update the player who placed the last stone - they get all clustered stones
@@ -188,13 +199,14 @@ const Game: React.FC = () => {
       return updatedPlayers;
     });
     
-    // Notify other players about the clustering
-    if (playerId !== null && isInRoom) {
+    // Notify other players about the clustering only if this is a local event
+    if (playerId !== null && isInRoom && !fromServer) {
+      console.log('Notifying server about cluster:', clusteredStones);
       notifyCluster(clusteredStones);
       
       // Update the game state on the server
       updateGameState({
-        stones: stones.filter(stone => !clusteredStones.includes(stone)),
+        stones: stones.filter(stone => !clusteredStones.some(cs => cs.id === stone.id)),
         currentPlayer: currentPlayer,
         players: players.map((player, idx) => {
           if (idx === lastPlayerIndex) {
@@ -209,6 +221,11 @@ const Game: React.FC = () => {
         winner: winner
       });
     }
+    
+    // Reset processing flag after a short delay
+    setTimeout(() => {
+      setProcessingCluster(false);
+    }, 500);
   }, [currentPlayer, players, stones, playerId, isInRoom, notifyCluster, updateGameState, gameOver, winner]);
   
   // Reset game state
