@@ -3,9 +3,9 @@ import { io, Socket } from 'socket.io-client';
 import { Stone, Player } from '../types';
 
 // Define the server URL based on environment
-const SERVER_URL = import.meta.env.DEV 
-  ? 'http://localhost:3001' 
-  : window.location.origin;
+const SERVER_URL = import.meta.env.PROD 
+  ? window.location.origin
+  : 'http://localhost:3001';
 
 // Define the context types
 interface MultiplayerContextType {
