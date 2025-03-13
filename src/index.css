@@ -26,6 +26,10 @@ html, body {
   height: 100%;
   overflow: hidden;
   background-color: #1a1a2e;
+  /* Prevent text size adjustment on orientation change */
+  -webkit-text-size-adjust: 100%;
+  /* Prevent callout */
+  -webkit-touch-callout: none;
 }
 
 body {
@@ -33,6 +37,8 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  /* Prevent overscroll/bounce effect */
+  overscroll-behavior: none;
 }
 
 #root {
@@ -187,4 +193,133 @@ li {
 
 .game-over {
   animation: fadeIn 0.8s ease-out;
+}
+
+/* Mobile Responsive Design */
+@media (max-width: 768px) {
+  .game-content {
+    flex-direction: column;
+    padding: 10px;
+    gap: 20px;
+  }
+
+  .board-wrapper {
+    transform: scale(0.8);
+    margin: 0 auto;
+  }
+
+  .side-panel {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 15px;
+  }
+
+  .game-title {
+    font-size: 28px;
+  }
+
+  .player-cards {
+    flex-direction: row;
+  }
+
+  .player-card {
+    padding: 10px;
+  }
+
+  .player-name {
+    font-size: 16px;
+  }
+
+  .stones-count {
+    font-size: 20px;
+  }
+
+  .turn-indicator {
+    padding: 8px;
+  }
+
+  .turn-text {
+    font-size: 14px;
+  }
+
+  .player-turn {
+    font-size: 18px;
+  }
+
+  .game-over-popup {
+    width: 90%;
+    max-width: 350px;
+    padding: 20px;
+  }
+
+  .game-over-title {
+    font-size: 24px;
+  }
+
+  .winner-text {
+    font-size: 18px;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  .board-wrapper {
+    transform: scale(0.65);
+  }
+
+  .game-title {
+    font-size: 24px;
+  }
+
+  .player-name {
+    font-size: 14px;
+  }
+
+  .stones-count {
+    font-size: 18px;
+  }
+
+  .stone-indicators {
+    gap: 3px;
+  }
+
+  .stone-indicator {
+    width: 6px;
+    height: 6px;
+  }
+
+  .game-over-title {
+    font-size: 22px;
+  }
+
+  .winner-text {
+    font-size: 16px;
+  }
+
+  button {
+    padding: 0.5em 1em;
+    font-size: 0.9em;
+  }
+}
+
+/* Landscape orientation on mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  .game-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .board-wrapper {
+    transform: scale(0.6);
+    margin: 0;
+  }
+
+  .side-panel {
+    height: 90vh;
+    width: 250px;
+    overflow-y: auto;
+  }
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Stone, Player } from '../types';
 import './GameBoard.css';
 
@@ -18,7 +18,7 @@ const PLAY_AREA_RADIUS = 250;
 const MAGNETIC_FORCE_DISTANCE = 180;
 const MAGNETIC_FORCE_MULTIPLIER = 120;
 const CLUSTER_THRESHOLD = 80; // Decreased to make clustering more reliable
-const ANIMATION_DURATION = 800; // ms
+const ANIMATION_DURATION = 600; // Reduced animation duration for better performance
 
 // Player colors for the board border
 const PLAYER_COLORS = ['var(--player1-color)', 'var(--player2-color)']; // Updated to use CSS variables
@@ -38,9 +38,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [nearClusterStones, setNearClusterStones] = useState<Stone[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [lastClusterCheck, setLastClusterCheck] = useState(0);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Calculate magnetic strength between two stones
-  const calculateMagneticStrength = (stone1: Stone, stone2: Stone) => {
+  const calculateMagneticStrength = useCallback((stone1: Stone, stone2: Stone) => {
     const dx = stone1.x - stone2.x;
     const dy = stone1.y - stone2.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -60,10 +61,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }
     
     return strength;
-  };
+  }, []);
 
   // Check if stones form a cluster
-  const checkClustering = () => {
+  const checkClustering = useCallback(() => {
     if (isAnimating || stones.length < 2) return;
     
     // Throttle cluster checking to avoid excessive checks
@@ -144,50 +145,71 @@ const GameBoard: React.FC<GameBoardProps> = ({
       setClusteredStones(clusteredStonesArray);
       setIsAnimating(true);
       
+      // Use a single timeout instead of multiple animation frames
       setTimeout(() => {
         onClustered(clusteredStonesArray);
         setClusteredStones([]);
         setIsAnimating(false);
       }, ANIMATION_DURATION);
     }
-  };
+  }, [stones, isAnimating, lastClusterCheck, onClustered]);
 
   // Update magnetic field lines
   useEffect(() => {
     if (isAnimating) return;
     
-    const newLines: Array<{ x1: number; y1: number; x2: number; y2: number; strength: number }> = [];
-    
-    for (let i = 0; i < stones.length; i++) {
-      for (let j = i + 1; j < stones.length; j++) {
-        const stone1 = stones[i];
-        const stone2 = stones[j];
-        const strength = calculateMagneticStrength(stone1, stone2);
-        
-        if (strength > 0) {
-          newLines.push({
-            x1: stone1.x,
-            y1: stone1.y,
-            x2: stone2.x,
-            y2: stone2.y,
-            strength
-          });
-        }
-      }
+    // Cancel any existing animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
     }
     
-    setMagneticLines(newLines);
-  }, [stones, isAnimating]);
+    // Use requestAnimationFrame for better performance
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const newLines: Array<{ x1: number; y1: number; x2: number; y2: number; strength: number }> = [];
+      
+      // Limit the number of lines to improve performance
+      const maxLines = 20;
+      let lineCount = 0;
+      
+      for (let i = 0; i < stones.length && lineCount < maxLines; i++) {
+        for (let j = i + 1; j < stones.length && lineCount < maxLines; j++) {
+          const stone1 = stones[i];
+          const stone2 = stones[j];
+          const strength = calculateMagneticStrength(stone1, stone2);
+          
+          if (strength > 0) {
+            newLines.push({
+              x1: stone1.x,
+              y1: stone1.y,
+              x2: stone2.x,
+              y2: stone2.y,
+              strength
+            });
+            lineCount++;
+          }
+        }
+      }
+      
+      setMagneticLines(newLines);
+    });
+    
+    // Cleanup animation frame on unmount
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [stones, isAnimating, calculateMagneticStrength]);
 
   // Check for clustering after stones move
   useEffect(() => {
     if (!isAnimating) {
       checkClustering();
     }
-  }, [stones, isAnimating]);
+  }, [stones, isAnimating, checkClustering]);
 
   // Handle mouse events
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     // Only allow stone placement if it's the player's turn
     if (!isMyTurn) return;
     
@@ -204,9 +226,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
         setDraggingStone({ x, y });
       }
     }
-  };
+  }, [isMyTurn, isAnimating]);
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isAnimating || !draggingStone) return;
     
     if (boardRef.current) {
@@ -220,18 +242,66 @@ const GameBoard: React.FC<GameBoardProps> = ({
         setDraggingStone({ x, y });
       }
     }
-  };
+  }, [isAnimating, draggingStone]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (isAnimating || !draggingStone) return;
     
     onStonePlaced(draggingStone.x, draggingStone.y);
     setDraggingStone(null);
-  };
+  }, [isAnimating, draggingStone, onStonePlaced]);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
     setDraggingStone(null);
-  };
+  }, []);
+
+  // Handle touch events for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Only allow stone placement if it's the player's turn
+    if (!isMyTurn) return;
+    
+    if (isAnimating) return;
+    
+    if (boardRef.current) {
+      const rect = boardRef.current.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left - rect.width / 2;
+      const y = touch.clientY - rect.top - rect.height / 2;
+      
+      // Check if within play area
+      const distanceFromCenter = Math.sqrt(x * x + y * y);
+      if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+        setDraggingStone({ x, y });
+      }
+    }
+  }, [isMyTurn, isAnimating]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isAnimating || !draggingStone) return;
+    
+    // Prevent scrolling when dragging
+    e.preventDefault();
+    
+    if (boardRef.current) {
+      const rect = boardRef.current.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = touch.clientX - rect.left - rect.width / 2;
+      const y = touch.clientY - rect.top - rect.height / 2;
+      
+      // Check if within play area
+      const distanceFromCenter = Math.sqrt(x * x + y * y);
+      if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+        setDraggingStone({ x, y });
+      }
+    }
+  }, [isAnimating, draggingStone]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (isAnimating || !draggingStone) return;
+    
+    onStonePlaced(draggingStone.x, draggingStone.y);
+    setDraggingStone(null);
+  }, [isAnimating, draggingStone, onStonePlaced]);
 
   return (
     <div 
@@ -241,6 +311,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         width: PLAY_AREA_RADIUS * 2,
         height: PLAY_AREA_RADIUS * 2,
@@ -267,7 +340,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
         }}
       ></div>
       
-      {/* Magnetic field lines */}
+      {/* Magnetic field lines - limit the number for better performance */}
       {magneticLines.map((line, index) => {
         const opacity = Math.min(line.strength / 100, 0.5);
         const width = Math.max(1, Math.min(line.strength / 20, 5));
@@ -296,13 +369,14 @@ const GameBoard: React.FC<GameBoardProps> = ({
         
         return (
           <div
-            key={`stone-${index}`}
-            className={`stone flat ${isCluster ? 'clustered' : ''} ${isNearCluster ? 'near-cluster' : ''}`}
+            key={`stone-${stone.id}`}
+            className={`stone ${stone.onEdge ? 'edge' : 'flat'} ${isCluster ? 'clustered' : ''} ${isNearCluster ? 'near-cluster' : ''}`}
             style={{
               width: STONE_RADIUS * 2,
               height: STONE_RADIUS * 2,
               left: PLAY_AREA_RADIUS + stone.x - STONE_RADIUS,
-              top: PLAY_AREA_RADIUS + stone.y - STONE_RADIUS
+              top: PLAY_AREA_RADIUS + stone.y - STONE_RADIUS,
+              backgroundColor: stone.player.id === 0 ? PLAYER_COLORS[0] : PLAYER_COLORS[1]
             }}
           >
           </div>
@@ -312,12 +386,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
       {/* Dragging stone preview */}
       {draggingStone && (
         <div
-          className="stone dragging flat"
+          className={`stone dragging ${placementMode}`}
           style={{
             width: STONE_RADIUS * 2,
             height: STONE_RADIUS * 2,
             left: PLAY_AREA_RADIUS + draggingStone.x - STONE_RADIUS,
-            top: PLAY_AREA_RADIUS + draggingStone.y - STONE_RADIUS
+            top: PLAY_AREA_RADIUS + draggingStone.y - STONE_RADIUS,
+            backgroundColor: PLAYER_COLORS[currentPlayer.id]
           }}
         >
         </div>
@@ -326,4 +401,4 @@ const GameBoard: React.FC<GameBoardProps> = ({
   );
 };
 
-export default GameBoard; 
+export default React.memo(GameBoard); 
