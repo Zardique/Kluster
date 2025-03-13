@@ -153,9 +153,12 @@
   border-radius: 15px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--card-border);
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
 }
 
 .player-card.active {
@@ -176,6 +179,7 @@
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 5px 0;
+  text-align: center;
 }
 
 .player-1 .player-name {
@@ -186,10 +190,17 @@
   color: var(--player2-color);
 }
 
+.opponent-label {
+  font-size: 14px;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
 .stones-count {
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 700;
-  margin: 0;
+  margin: 5px 0;
+  text-align: center;
 }
 
 .stone-indicators {
@@ -197,6 +208,9 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 5px;
+  justify-content: center;
+  align-items: center;
+  min-height: 20px;
 }
 
 .stone-indicator {
@@ -216,10 +230,29 @@
   box-shadow: 0 0 5px var(--player2-color);
 }
 
+/* Stone count indicator */
+.stone-indicators span {
+  font-size: 12px !important;
+  margin-left: 4px;
+  opacity: 0.9;
+  font-weight: 600;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.player-1 .stone-indicators span {
+  color: var(--player1-color);
+}
+
+.player-2 .stone-indicators span {
+  color: var(--player2-color);
+}
+
 /* Current turn indicator */
 .turn-indicator {
   text-align: center;
-  padding: 12px;
+  padding: 15px;
   border-radius: 15px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--card-border);
@@ -228,29 +261,27 @@
 .turn-text {
   font-size: 16px;
   font-weight: 600;
-  margin: 0;
+  margin: 0 0 5px 0;
+  opacity: 0.8;
 }
 
 .player-turn {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
-  margin: 2px 0;
+  margin: 5px 0;
   transition: color 0.3s ease;
 }
 
-.player-1-turn {
-  color: var(--player1-color);
-  text-shadow: 0 0 5px var(--player1-color);
-}
-
-.player-2-turn {
-  color: var(--player2-color);
-  text-shadow: 0 0 5px var(--player2-color);
+.instruction {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 5px 0 0 0;
+  font-style: italic;
 }
 
 /* Game rules section */
 .game-rules {
-  padding: 15px;
+  padding: 20px;
   border-radius: 15px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--card-border);
@@ -259,15 +290,38 @@
 .rules-title {
   font-size: 20px;
   font-weight: 700;
-  margin: 0 0 10px 0;
+  margin: 0 0 15px 0;
   color: white;
+  text-align: center;
 }
 
-.rules-text {
-  font-size: 14px;
-  line-height: 1.5;
+.rules-list {
+  list-style-type: none;
+  padding: 0;
   margin: 0;
-  color: rgba(255, 255, 255, 0.8);
+}
+
+.rules-list li {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 15px;
+}
+
+.rules-list li:last-child {
+  margin-bottom: 0;
+}
+
+.rules-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--player1-color);
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 /* Game over overlay */

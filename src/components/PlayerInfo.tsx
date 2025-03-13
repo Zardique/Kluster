@@ -68,7 +68,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
               {Array.from({ length: Math.min(player.stonesLeft, 8) }).map((_, i) => (
                 <div key={i} className="stone-indicator" />
               ))}
-              {player.stonesLeft > 8 && <span style={{ fontSize: '10px', marginLeft: '3px' }}>+{player.stonesLeft - 8}</span>}
+              {player.stonesLeft > 8 && <span>+{player.stonesLeft - 8}</span>}
             </div>
           </div>
         ))}
