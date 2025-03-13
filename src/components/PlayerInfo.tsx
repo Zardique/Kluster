@@ -56,8 +56,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
             className={`player-card player-${player.id + 1} ${player.id === currentPlayer && !gameOver ? 'active' : ''} ${player.id === myPlayerId ? 'my-player' : ''}`}
           >
             <h3 className="player-name">
-              {player.id === myPlayerId ? 'You' : player.name}
-              {myPlayerId !== null && player.id !== myPlayerId && <span className="opponent-label"> (Opponent)</span>}
+              {player.id === myPlayerId ? 'You' : 'Opponent'}
             </h3>
             <div className="stones-count">
               <span className={animatingPlayer === player.id ? 'count-changing' : ''}>
@@ -77,7 +76,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
       <div className="turn-indicator">
         <p className="turn-text">Current Turn</p>
         <p className={`player-turn player-${currentPlayer + 1}-turn`}>
-          {myPlayerId !== null && currentPlayer === myPlayerId ? 'Your Turn' : players[currentPlayer].name}
+          {myPlayerId !== null && currentPlayer === myPlayerId ? 'Your Turn' : 'Opponent\'s Turn'}
         </p>
         <p className="instruction">
           {myPlayerId !== null && currentPlayer === myPlayerId 
