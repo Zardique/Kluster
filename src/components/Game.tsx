@@ -303,12 +303,9 @@ const Game: React.FC = () => {
             <h2 className="game-over-title">Game Over!</h2>
             {winner !== null && (
               <p className="winner-text">
-                {winner === playerId ? 'You win!' : `${players[winner].name} wins!`}
+                {winner === playerId ? 'You win!' : 'Opponent wins!'}
               </p>
             )}
-            <p className="winner-description">
-              First player to place all their stones wins!
-            </p>
             <button 
               className="reset-button"
               onClick={resetGame}

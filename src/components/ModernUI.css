@@ -751,14 +751,18 @@
   background: var(--primary-gradient);
   color: white;
   border: none;
-  border-radius: 16px;
-  padding: 14px 22px;
+  border-radius: 12px;
+  padding: 10px 14px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000);
   white-space: nowrap;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .copy-button:hover {
