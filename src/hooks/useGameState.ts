@@ -1,11 +1,21 @@
 import { useState, useCallback, useEffect } from 'react';
-import { GameState, Stone, Player, GameEvent } from '../types';
+import { Stone, Player } from '../types';
 
 // Constants
 const INITIAL_STONES_PER_PLAYER = 12;
 const STONE_RADIUS = 15;
 
 interface UseGameStateProps {
+  playAreaRadius: number;
+}
+
+interface GameState {
+  players: Player[];
+  currentPlayer: Player;
+  stones: Stone[];
+  gameOver: boolean;
+  winner: Player | null;
+  lastPlacedStoneId: string | null;
   playAreaRadius: number;
 }
 
@@ -19,10 +29,11 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
 
     return {
       players,
-      currentPlayer: 0, // Player 1 starts
+      currentPlayer: players[0], // Player 1 starts
       stones: [],
       gameOver: false,
       winner: null,
+      lastPlacedStoneId: null,
       playAreaRadius
     };
   });
@@ -51,7 +62,8 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
       }
 
       const currentPlayer = prevState.currentPlayer;
-      const player = prevState.players[currentPlayer];
+      const playerIndex = prevState.players.findIndex(p => p.id === currentPlayer.id);
+      const player = prevState.players[playerIndex];
 
       // Check if the player has stones left
       if (player.stonesLeft <= 0) {
@@ -66,27 +78,30 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
         y,
         radius: STONE_RADIUS,
         player: currentPlayer,
-        clustered: false
+        clustered: false,
+        height: 10, // Default height
+        onEdge: false // Default not on edge
       };
 
       console.log('Created new stone:', newStone);
 
       // Update player's stones left
       const updatedPlayers = [...prevState.players];
-      updatedPlayers[currentPlayer] = {
+      updatedPlayers[playerIndex] = {
         ...player,
         stonesLeft: player.stonesLeft - 1
       };
 
       // Check if the player has won
-      const hasWon = updatedPlayers[currentPlayer].stonesLeft === 0;
+      const hasWon = updatedPlayers[playerIndex].stonesLeft === 0;
 
       const newState = {
         ...prevState,
         stones: [...prevState.stones, newStone],
         players: updatedPlayers,
         gameOver: hasWon,
-        winner: hasWon ? currentPlayer : null
+        winner: hasWon ? currentPlayer : null,
+        lastPlacedStoneId: newStone.id
       };
 
       console.log('New game state after placing stone:', newState);
@@ -110,22 +125,27 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
       );
 
       // Count clustered stones by player
-      const clusteredStonesByPlayer = clusteredStoneIds.reduce((acc, stoneId) => {
+      const clusteredStonesByPlayer: Record<number, number> = {};
+      
+      clusteredStoneIds.forEach(stoneId => {
         const stone = prevState.stones.find(s => s.id === stoneId);
         if (stone) {
-          acc[stone.player] = (acc[stone.player] || 0) + 1;
+          const playerId = stone.player.id;
+          clusteredStonesByPlayer[playerId] = (clusteredStonesByPlayer[playerId] || 0) + 1;
         }
-        return acc;
-      }, {} as Record<number, number>);
+      });
 
       // Update players' stones left
       const updatedPlayers = [...prevState.players];
       Object.entries(clusteredStonesByPlayer).forEach(([playerIdStr, count]) => {
         const playerId = parseInt(playerIdStr);
-        updatedPlayers[playerId] = {
-          ...updatedPlayers[playerId],
-          stonesLeft: updatedPlayers[playerId].stonesLeft + count
-        };
+        const playerIndex = updatedPlayers.findIndex(p => p.id === playerId);
+        if (playerIndex !== -1) {
+          updatedPlayers[playerIndex] = {
+            ...updatedPlayers[playerIndex],
+            stonesLeft: updatedPlayers[playerIndex].stonesLeft + count
+          };
+        }
       });
 
       // Log for debugging
@@ -147,10 +167,16 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
       // Check if the game is over
       if (prevState.gameOver) return prevState;
 
+      // Find the current player index
+      const currentPlayerIndex = prevState.players.findIndex(
+        player => player.id === prevState.currentPlayer.id
+      );
+      
       // Switch to the next player
-      const nextPlayer = (prevState.currentPlayer + 1) % prevState.players.length;
+      const nextPlayerIndex = (currentPlayerIndex + 1) % prevState.players.length;
+      const nextPlayer = prevState.players[nextPlayerIndex];
 
-      console.log('Changing turn to player:', nextPlayer);
+      console.log('Changing turn to player:', nextPlayer.id);
       
       return {
         ...prevState,
@@ -188,16 +214,21 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
   const resetGame = useCallback(() => {
     console.log('Resetting game');
     
-    setGameState({
-      players: [
+    setGameState(prevState => {
+      const players = [
         { id: 0, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 1' },
         { id: 1, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 2' }
-      ],
-      currentPlayer: 0,
-      stones: [],
-      gameOver: false,
-      winner: null,
-      playAreaRadius
+      ];
+      
+      return {
+        players,
+        currentPlayer: players[0],
+        stones: [],
+        gameOver: false,
+        winner: null,
+        lastPlacedStoneId: null,
+        playAreaRadius
+      };
     });
   }, [playAreaRadius]);
 

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
-import { Stone } from '../types';
+import { Stone, Player } from '../types';
 import './GameBoard3D.css';
 
 interface GameBoardProps {
@@ -11,7 +11,7 @@ interface GameBoardProps {
   onStonePlace: (x: number, y: number) => void;
   onCluster: (clusteredStoneIds: string[]) => void;
   updateStonePositions: (updates: { id: string; x: number; y: number }[]) => void;
-  currentPlayer: number;
+  currentPlayer: Player;
   gameOver: boolean;
   placementMode: 'flat' | 'edge';
 }
