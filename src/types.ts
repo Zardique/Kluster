@@ -13,4 +13,18 @@ export interface Player {
   id: number;
   stonesLeft: number;
   name: string;
+}
+
+export interface GameState {
+  stones: Stone[];
+  players: Player[];
+  currentPlayer: Player;
+  gameOver: boolean;
+  winner: Player | null;
+  lastPlacedStoneId: string | null;
+}
+
+export interface GameEvent {
+  type: string;
+  payload?: any;
 } 

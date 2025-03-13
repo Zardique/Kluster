@@ -391,15 +391,11 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
           ];
           
           // Determine stone color based on player
-          const color = stone.player === 0 
-            ? new THREE.Color(0x3498db) 
-            : new THREE.Color(0xe74c3c);
+          const color = stone.player.id === currentPlayer.id ? new THREE.Color(0x3498db) : new THREE.Color(0xe74c3c);
           
           // Add glow effect for magnetic strength
           const glowIntensity = magneticStrength * 0.5;
-          const emissiveColor = stone.player === 0 
-            ? new THREE.Color(0x3498db).multiplyScalar(glowIntensity) 
-            : new THREE.Color(0xe74c3c).multiplyScalar(glowIntensity);
+          const emissiveColor = stone.player.id === currentPlayer.id ? new THREE.Color(0x3498db).multiplyScalar(glowIntensity) : new THREE.Color(0xe74c3c).multiplyScalar(glowIntensity);
           
           return (
             <group key={stone.id}>
@@ -427,7 +423,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
               >
                 <sphereGeometry args={[STONE_RADIUS * 1.1, 16, 16]} />
                 <meshBasicMaterial 
-                  color={stone.player === 0 ? 0x3498db : 0xe74c3c} 
+                  color={stone.player.id === currentPlayer.id ? 0x3498db : 0xe74c3c} 
                   transparent={true} 
                   opacity={0.1} 
                   side={THREE.BackSide}
@@ -449,7 +445,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
           >
             <cylinderGeometry args={[STONE_RADIUS, STONE_RADIUS, STONE_HEIGHT, STONE_SEGMENTS]} />
             <meshStandardMaterial 
-              color={currentPlayer === 0 ? 0x3498db : 0xe74c3c}
+              color={currentPlayer.id === currentPlayer.id ? 0x3498db : 0xe74c3c}
               transparent={true}
               opacity={0.5}
             />
