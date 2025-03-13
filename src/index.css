@@ -26,10 +26,6 @@ html, body {
   height: 100%;
   overflow: hidden;
   background-color: #1a1a2e;
-  /* Prevent text size adjustment on orientation change */
-  -webkit-text-size-adjust: 100%;
-  /* Prevent callout */
-  -webkit-touch-callout: none;
 }
 
 body {
@@ -37,8 +33,6 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-  /* Prevent overscroll/bounce effect */
-  overscroll-behavior: none;
 }
 
 #root {
@@ -197,6 +191,18 @@ li {
 
 /* Mobile Responsive Design */
 @media (max-width: 768px) {
+  /* Prevent text size adjustment on orientation change */
+  html, body {
+    -webkit-text-size-adjust: 100%;
+    /* Prevent callout */
+    -webkit-touch-callout: none;
+  }
+  
+  /* Prevent overscroll/bounce effect */
+  body {
+    overscroll-behavior: none;
+  }
+
   .game-content {
     flex-direction: column;
     padding: 10px;

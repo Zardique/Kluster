@@ -31,9 +31,6 @@
   overflow: hidden;
   margin: 0;
   padding: 0;
-  /* Add hardware acceleration */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 /* Animated background elements */
@@ -43,9 +40,6 @@
   filter: blur(40px);
   opacity: 0.15;
   z-index: 0;
-  /* Add hardware acceleration */
-  will-change: transform;
-  transform: translateZ(0);
 }
 
 .bg-element-1 {
@@ -76,11 +70,11 @@
 }
 
 @keyframes float {
-  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  25% { transform: translate3d(50px, 50px, 0) rotate(5deg); }
-  50% { transform: translate3d(0, 100px, 0) rotate(0deg); }
-  75% { transform: translate3d(-50px, 50px, 0) rotate(-5deg); }
-  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(50px, 50px) rotate(5deg); }
+  50% { transform: translate(0, 100px) rotate(0deg); }
+  75% { transform: translate(-50px, 50px) rotate(-5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
 }
 
 /* Game content wrapper */
@@ -103,9 +97,6 @@
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.4);
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-  /* Add hardware acceleration */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .board-glow {
@@ -119,8 +110,6 @@
   opacity: 0.7;
   filter: blur(20px);
   transition: background 0.5s ease;
-  /* Add hardware acceleration */
-  transform: translateZ(0);
 }
 
 /* Side panel styling */
@@ -137,8 +126,6 @@
   gap: 15px;
   max-height: 100%;
   overflow-y: auto;
-  /* Add hardware acceleration */
-  transform: translateZ(0);
 }
 
 /* Game title */
@@ -308,8 +295,6 @@
   text-align: center;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.5s ease-out;
-  /* Add hardware acceleration */
-  transform: translateZ(0);
 }
 
 .game-over-title {
@@ -365,8 +350,6 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   z-index: 10;
   animation: fadeIn 0.8s ease-out;
-  /* Add hardware acceleration */
-  transform: translateZ(0);
 }
 
 .lobby-title {
@@ -507,6 +490,18 @@
   .bg-element-3 {
     width: 150px;
     height: 150px;
+  }
+  
+  /* Add hardware acceleration only for mobile */
+  .modern-container,
+  .board-wrapper,
+  .board-glow,
+  .side-panel,
+  .game-over-popup,
+  .lobby,
+  .bg-element {
+    transform: translateZ(0);
+    will-change: transform;
   }
 }
 
