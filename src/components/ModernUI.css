@@ -416,24 +416,47 @@
   font-size: 18px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.lobby-button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.lobby-button:hover::after {
+  opacity: 1;
+}
+
+.lobby-button.start-game {
+  background: var(--primary-gradient);
+  margin-top: 10px;
+  font-size: 20px;
+  padding: 15px 40px;
+}
+
+.lobby-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lobby-button:disabled:hover {
+  transform: none;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
 
-.lobby-button:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-}
-
-.lobby-button:active {
-  transform: translateY(0);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-}
-
-.lobby-button.secondary {
-  background: transparent;
-  border: 2px solid var(--player1-color);
-  color: white;
+.lobby-button:disabled::after {
+  opacity: 0;
 }
 
 .room-id-input {
@@ -626,21 +649,26 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin: 15px 0;
+  gap: 15px;
+  margin: 20px 0;
 }
 
 .room-code span {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--card-border);
   border-radius: 15px;
-  padding: 12px 20px;
-  font-size: 24px;
+  padding: 15px 20px;
+  font-size: 28px;
   color: white;
   flex: 1;
   text-align: center;
-  letter-spacing: 3px;
-  font-weight: 600;
+  letter-spacing: 5px;
+  font-weight: 700;
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.3),
+    0 0 15px rgba(110, 142, 251, 0.2);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000);
 }
 
 .copy-button {
@@ -648,21 +676,86 @@
   color: white;
   border: none;
   border-radius: 15px;
-  padding: 12px 15px;
-  font-size: 14px;
+  padding: 12px 20px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000);
   white-space: nowrap;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.copy-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.copy-button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
 }
 
 .room-status {
-  margin: 20px 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 16px;
-  animation: pulse 1.5s infinite ease-in-out;
+  margin: 25px 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  font-weight: 500;
+  animation: gentle-pulse 2s infinite ease-in-out;
 }
 
+@keyframes gentle-pulse {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+/* Mobile adjustments for lobby */
+@media (max-width: 768px) {
+  .room-code {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .room-code span {
+    font-size: 24px;
+    padding: 12px 15px;
+    letter-spacing: 3px;
+  }
+  
+  .copy-button {
+    width: 100%;
+    padding: 10px 15px;
+  }
+  
+  .room-status {
+    font-size: 16px;
+    margin: 20px 0;
+  }
+  
+  .lobby-button.start-game {
+    font-size: 18px;
+    padding: 12px 30px;
+  }
+}
+
+/* Lobby button hover and active states */
+.lobby-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.lobby-button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+.lobby-button.secondary {
+  background: transparent;
+  border: 2px solid var(--player1-color);
+  color: white;
+}
+
+/* Error message styling */
 .error-message {
   margin-top: 20px;
   color: #ff6b6b;
@@ -671,15 +764,4 @@
   background: rgba(255, 0, 0, 0.1);
   border-radius: 10px;
   border: 1px solid rgba(255, 0, 0, 0.2);
-}
-
-/* Mobile adjustments for lobby */
-@media (max-width: 768px) {
-  .room-code {
-    flex-direction: column;
-  }
-  
-  .copy-button {
-    width: 100%;
-  }
 } 
