@@ -263,37 +263,40 @@ const Game: React.FC = () => {
         <Lobby onStartGame={handleStartGame} />
       )}
       
-      <div className="game-content">
-        {/* Game board on the left */}
-        <div className="board-wrapper">
-          <div 
-            className="board-glow" 
-            style={{ 
-              background: currentPlayer === 0 
-                ? 'rgba(110, 142, 251, 0.3)' 
-                : 'rgba(246, 211, 101, 0.3)' 
-            }}
-          ></div>
-          <GameBoard
-            stones={stones}
-            currentPlayer={players[currentPlayer]}
-            onStonePlaced={handleStonePlace}
-            onClustered={handleCluster}
-            placementMode="flat"
-            isMyTurn={playerId === null || playerId === currentPlayer}
+      {/* Only show game content when not in lobby or game has started */}
+      {(!showLobby || isGameStarted) && (
+        <div className="game-content">
+          {/* Game board on the left */}
+          <div className="board-wrapper">
+            <div 
+              className="board-glow" 
+              style={{ 
+                background: currentPlayer === 0 
+                  ? 'rgba(110, 142, 251, 0.3)' 
+                  : 'rgba(246, 211, 101, 0.3)' 
+              }}
+            ></div>
+            <GameBoard
+              stones={stones}
+              currentPlayer={players[currentPlayer]}
+              onStonePlaced={handleStonePlace}
+              onClustered={handleCluster}
+              placementMode="flat"
+              isMyTurn={playerId === null || playerId === currentPlayer}
+            />
+          </div>
+          
+          {/* Controls and info on the right */}
+          <PlayerInfo
+            players={players}
+            currentPlayer={currentPlayer}
+            gameOver={false} // Always false since we're using the popup now
+            winner={null}
+            onReset={resetGame}
+            myPlayerId={playerId}
           />
         </div>
-        
-        {/* Controls and info on the right */}
-        <PlayerInfo
-          players={players}
-          currentPlayer={currentPlayer}
-          gameOver={false} // Always false since we're using the popup now
-          winner={null}
-          onReset={resetGame}
-          myPlayerId={playerId}
-        />
-      </div>
+      )}
       
       {/* Game over popup overlay */}
       {gameOver && (
