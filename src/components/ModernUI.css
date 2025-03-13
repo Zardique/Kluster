@@ -338,6 +338,37 @@
 }
 
 /* Lobby styles */
+.lobby-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  background: var(--dark-bg);
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(110, 142, 251, 0.1) 0%, transparent 20%),
+    radial-gradient(circle at 90% 80%, rgba(246, 211, 101, 0.1) 0%, transparent 20%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
+}
+
+.lobby-container {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  padding: 30px;
+  width: 90%;
+  max-width: 500px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  animation: fadeIn 0.8s ease-out;
+}
+
 .lobby {
   background: var(--card-bg);
   backdrop-filter: blur(10px);
@@ -453,7 +484,7 @@
 
 /* Mobile Responsive Adjustments */
 @media (max-width: 768px) {
-  .lobby {
+  .lobby-container {
     width: 95%;
     padding: 20px;
   }
@@ -525,4 +556,130 @@
 @keyframes slideUp {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Additional lobby styles */
+.lobby-options {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.lobby-divider {
+  position: relative;
+  text-align: center;
+  margin: 15px 0;
+}
+
+.lobby-divider::before,
+.lobby-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background-color: var(--card-border);
+}
+
+.lobby-divider::before {
+  left: 0;
+}
+
+.lobby-divider::after {
+  right: 0;
+}
+
+.lobby-divider span {
+  display: inline-block;
+  padding: 0 10px;
+  background-color: rgba(0, 0, 0, 0.3);
+  position: relative;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.join-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.room-input {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border);
+  border-radius: 15px;
+  padding: 12px 20px;
+  font-size: 18px;
+  color: white;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 2px;
+}
+
+.room-input:focus {
+  outline: none;
+  border-color: var(--player1-color);
+  box-shadow: 0 0 10px rgba(110, 142, 251, 0.4);
+}
+
+.room-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.room-code span {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--card-border);
+  border-radius: 15px;
+  padding: 12px 20px;
+  font-size: 24px;
+  color: white;
+  flex: 1;
+  text-align: center;
+  letter-spacing: 3px;
+  font-weight: 600;
+}
+
+.copy-button {
+  background: var(--primary-gradient);
+  color: white;
+  border: none;
+  border-radius: 15px;
+  padding: 12px 15px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.room-status {
+  margin: 20px 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.error-message {
+  margin-top: 20px;
+  color: #ff6b6b;
+  font-size: 14px;
+  padding: 10px;
+  background: rgba(255, 0, 0, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 0, 0, 0.2);
+}
+
+/* Mobile adjustments for lobby */
+@media (max-width: 768px) {
+  .room-code {
+    flex-direction: column;
+  }
+  
+  .copy-button {
+    width: 100%;
+  }
 } 
