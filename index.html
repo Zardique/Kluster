@@ -4,10 +4,52 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+    <title>Kluster - Magnetic Stone Game</title>
+    <style>
+      #loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: Arial, sans-serif;
+      }
+      .spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border-left-color: #09f;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root">
+      <div id="loading">
+        <div class="spinner"></div>
+        <p>Loading Kluster...</p>
+      </div>
+    </div>
+    <script>
+      // Add error handling
+      window.addEventListener('error', function(e) {
+        console.error('Global error caught:', e.error || e.message);
+        document.getElementById('loading').innerHTML = `
+          <h2>Error Loading Application</h2>
+          <p>Sorry, something went wrong. Please try refreshing the page.</p>
+          <pre>${e.error ? e.error.stack : e.message}</pre>
+        `;
+      });
+
+      // Log when the script starts loading
+      console.log('Starting to load application script...');
+    </script>
+    <script type="module" src="/src/main.tsx" onerror="console.error('Failed to load main script')"></script>
   </body>
 </html>
