@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMultiplayer } from '../context/MultiplayerContext';
 import './ModernUI.css';
 
@@ -7,13 +7,14 @@ interface LobbyProps {
 }
 
 const Lobby: React.FC<LobbyProps> = ({ onStartGame }) => {
-  const [joinRoomId, setJoinRoomId] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [roomIdInput, setRoomIdInput] = useState('');
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
   
-  const {
-    createRoom,
-    joinRoom,
-    roomId,
+  const { 
+    createRoom, 
+    joinRoom, 
+    roomId, 
     isHost,
     isInRoom,
     isGameStarted,
@@ -21,116 +22,123 @@ const Lobby: React.FC<LobbyProps> = ({ onStartGame }) => {
     error
   } = useMultiplayer();
   
-  // Handle room creation
   const handleCreateRoom = () => {
     createRoom();
   };
   
-  // Handle room joining
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (joinRoomId.trim()) {
-      joinRoom(joinRoomId.trim());
+    if (!roomIdInput.trim()) {
+      setJoinError('Please enter a room code');
+      return;
     }
+    
+    joinRoom(roomIdInput.trim().toUpperCase());
+    setJoinError(null);
   };
   
-  // Copy room ID to clipboard
-  const copyRoomId = () => {
+  const handleCopyRoomId = () => {
     if (roomId) {
       navigator.clipboard.writeText(roomId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
   };
   
-  // Start the game when both players are ready
   const handleStartGame = () => {
-    if (isInRoom && (isHost ? opponentConnected : true)) {
+    if (isInRoom && isHost && opponentConnected) {
       onStartGame();
     }
   };
   
-  // If the game has started, don't show the lobby
+  // Reset join error when toggling form
+  useEffect(() => {
+    setJoinError(null);
+  }, [showJoinForm]);
+  
+  // If game has started, don't show the lobby
   if (isGameStarted) {
     return null;
   }
   
   return (
     <div className="lobby-overlay">
-      <div className="lobby-container">
+      <div className="bg-element bg-element-1"></div>
+      <div className="bg-element bg-element-2"></div>
+      <div className="bg-element bg-element-3"></div>
+      
+      <div className="lobby">
         <h1 className="lobby-title">Kluster</h1>
         <p className="lobby-subtitle">A magnetic stone clustering game</p>
         
         {!isInRoom ? (
-          <div className="lobby-options">
-            <button 
-              className="lobby-button create-room"
-              onClick={handleCreateRoom}
-            >
-              Create New Game
-            </button>
-            
-            <div className="lobby-divider">
-              <span>OR</span>
+          <>
+            <div className="lobby-buttons">
+              <button className="lobby-button" onClick={handleCreateRoom}>
+                Create New Game
+              </button>
+              <button 
+                className="lobby-button secondary" 
+                onClick={() => setShowJoinForm(!showJoinForm)}
+              >
+                {showJoinForm ? 'Cancel' : 'Join Existing Game'}
+              </button>
             </div>
             
-            <form onSubmit={handleJoinRoom} className="join-form">
-              <input
-                type="text"
-                value={joinRoomId}
-                onChange={(e) => setJoinRoomId(e.target.value)}
-                placeholder="Enter Room Code"
-                className="room-input"
-              />
-              <button 
-                type="submit" 
-                className="lobby-button join-room"
-                disabled={!joinRoomId.trim()}
-              >
-                Join Game
-              </button>
-            </form>
-          </div>
+            {showJoinForm && (
+              <form onSubmit={handleJoinRoom} className="join-form">
+                <input
+                  type="text"
+                  className="room-input"
+                  placeholder="Enter Room Code"
+                  value={roomIdInput}
+                  onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
+                  maxLength={6}
+                />
+                <button type="submit" className="lobby-button">
+                  Join Game
+                </button>
+                {joinError && <p className="error-message">{joinError}</p>}
+              </form>
+            )}
+          </>
         ) : (
-          <div className="room-info">
-            <h2>Room Code</h2>
+          <>
             <div className="room-code">
               <span>{roomId}</span>
-              <button 
-                className="copy-button" 
-                onClick={copyRoomId}
-                title="Copy to clipboard"
-              >
-                {copied ? '✓ Copied' : 'Copy'}
+              <button className="copy-button" onClick={handleCopyRoomId}>
+                Copy
               </button>
             </div>
             
             <p className="room-status">
-              {isHost 
-                ? opponentConnected 
-                  ? 'Opponent connected! You can start the game.'
-                  : 'Waiting for opponent to join...'
-                : 'Connected to room. Waiting for host to start the game.'
-              }
+              {!opponentConnected 
+                ? "Waiting for opponent to join..." 
+                : "Opponent joined! Ready to start."}
             </p>
             
-            {isHost && (
+            {isHost && opponentConnected && (
               <button 
-                className="lobby-button start-game"
+                className="lobby-button start-game" 
                 onClick={handleStartGame}
-                disabled={!opponentConnected}
               >
                 Start Game
               </button>
             )}
-          </div>
+            
+            {isHost && !opponentConnected && (
+              <p className="instruction">
+                Share the room code with a friend to play together
+              </p>
+            )}
+            
+            {!isHost && (
+              <p className="instruction">
+                Waiting for the host to start the game
+              </p>
+            )}
+          </>
         )}
         
-        {error && (
-          <div className="error-message">
-            {error}
-          </div>
-        )}
+        {error && <p className="error-message">{error}</p>}
       </div>
     </div>
   );
