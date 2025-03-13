@@ -125,22 +125,20 @@ const Game: React.FC = () => {
       return updatedPlayers;
     });
     
-    // Switch to the next player
-    setCurrentPlayer(prevPlayer => (prevPlayer + 1) % players.length);
-    
-    // Check if the game is over
-    const nextPlayer = (currentPlayer + 1) % players.length;
-    if (players[nextPlayer].stonesLeft === 0) {
+    // Check if the current player has placed all their stones
+    const currentPlayerStonesLeft = players[currentPlayer].stonesLeft - 1;
+    if (currentPlayerStonesLeft === 0) {
+      // Current player has placed all their stones and wins
       setGameOver(true);
-      
-      // Determine the winner (player with more stones left)
-      const winner = players[0].stonesLeft > players[1].stonesLeft ? 0 : 1;
-      setWinner(winner);
+      setWinner(currentPlayer);
       
       // Notify other players about the game over
       if (playerId !== null && isInRoom) {
-        notifyGameOver(winner);
+        notifyGameOver(currentPlayer);
       }
+    } else {
+      // Switch to the next player
+      setCurrentPlayer(prevPlayer => (prevPlayer + 1) % players.length);
     }
     
     // If this is our move, emit it to the server
@@ -150,7 +148,7 @@ const Game: React.FC = () => {
       // Update the game state on the server
       updateGameState({
         stones: [...stones, newStone],
-        currentPlayer: (currentPlayer + 1) % players.length,
+        currentPlayer: currentPlayerStonesLeft === 0 ? currentPlayer : (currentPlayer + 1) % players.length,
         players: players.map((player, idx) => {
           if (idx === currentPlayer) {
             return {
@@ -160,11 +158,11 @@ const Game: React.FC = () => {
           }
           return player;
         }),
-        gameOver: gameOver,
-        winner: winner
+        gameOver: currentPlayerStonesLeft === 0,
+        winner: currentPlayerStonesLeft === 0 ? currentPlayer : null
       });
     }
-  }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, updateGameState, notifyGameOver, gameOver, winner]);
+  }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, updateGameState, notifyGameOver]);
   
   // Handle clustered stones
   const handleCluster = useCallback((clusteredStones: Stone[], fromServer = false) => {
@@ -308,6 +306,9 @@ const Game: React.FC = () => {
                 {winner === playerId ? 'You win!' : `${players[winner].name} wins!`}
               </p>
             )}
+            <p className="winner-description">
+              First player to place all their stones wins!
+            </p>
             <button 
               className="reset-button"
               onClick={resetGame}
