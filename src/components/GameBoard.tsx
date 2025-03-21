@@ -526,13 +526,13 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       } ${isClusteredStone ? 'clustered' : ''} ${
         isNearCluster ? 'pre-cluster' : ''
       }`;
-      
+
+      // Use absolute positioning from the center of the game board
       const stoneStyle: React.CSSProperties = {
-        left: `${stone.x + PLAY_AREA_RADIUS}px`,
-        top: `${stone.y + PLAY_AREA_RADIUS}px`,
+        left: `calc(50% + ${stone.x}px)`,
+        top: `calc(50% + ${stone.y}px)`,
         width: `${STONE_RADIUS * 2}px`,
-        height: `${STONE_RADIUS * 2}px`,
-        transform: `translate(-50%, -50%)`
+        height: `${STONE_RADIUS * 2}px`
       };
       
       if (isClusteredStone) {
@@ -557,11 +557,10 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div
         className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
         style={{
-          left: `${draggingStone.x + PLAY_AREA_RADIUS}px`,
-          top: `${draggingStone.y + PLAY_AREA_RADIUS}px`,
+          left: `calc(50% + ${draggingStone.x}px)`,
+          top: `calc(50% + ${draggingStone.y}px)`,
           width: `${STONE_RADIUS * 2}px`,
-          height: `${STONE_RADIUS * 2}px`,
-          transform: `translate(-50%, -50%)`
+          height: `${STONE_RADIUS * 2}px`
         }}
       />
     );
@@ -575,11 +574,10 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div 
         className="placement-indicator" 
         style={{
-          left: `${indicatorPos.x + PLAY_AREA_RADIUS}px`,
-          top: `${indicatorPos.y + PLAY_AREA_RADIUS}px`,
+          left: `calc(50% + ${indicatorPos.x}px)`,
+          top: `calc(50% + ${indicatorPos.y}px)`,
           width: `${STONE_RADIUS * 2}px`,
           height: `${STONE_RADIUS * 2}px`,
-          transform: `translate(-50%, -50%)`,
           borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
         }}
       />
