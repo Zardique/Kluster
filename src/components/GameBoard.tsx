@@ -53,6 +53,41 @@ interface GameBoardProps {
   isMyTurn?: boolean;
 }
 
+// Split stone rendering into a dedicated component for better control
+const StoneComponent: React.FC<{
+  stone: Stone;
+  isClusteredStone: boolean;
+  isNearCluster: boolean;
+  getClusterAngle: (stone: Stone) => number;
+}> = React.memo(({ stone, isClusteredStone, isNearCluster, getClusterAngle }) => {
+  const playerId = stone.player.id === 0 ? 1 : 2;
+  const stoneClass = `stone player-${playerId} ${
+    stone.onEdge ? 'on-edge' : ''
+  } ${isClusteredStone ? 'clustered' : ''} ${
+    isNearCluster ? 'pre-cluster' : ''
+  }`;
+
+  const stoneStyle: React.CSSProperties = {
+    left: `calc(50% + ${stone.x}px)`,
+    top: `calc(50% + ${stone.y}px)`,
+    width: `${STONE_RADIUS * 2}px`,
+    height: `${STONE_RADIUS * 2}px`
+  };
+  
+  if (isClusteredStone) {
+    stoneStyle['--cluster-angle' as any] = `${getClusterAngle(stone)}deg`;
+  }
+  
+  return (
+    <div
+      key={stone.id}
+      className={stoneClass}
+      style={stoneStyle}
+      data-stone-id={stone.id}
+    />
+  );
+});
+
 const GameBoard: React.FC<GameBoardProps> = React.memo(({
   stones,
   currentPlayer,
@@ -394,7 +429,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     };
   }, []);
 
-  // Handle mouse events - optimized to reduce calculations
+  // Handle mouse events - simplified and more reliable
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     // Only allow stone placement if it's the player's turn
     if (!isMyTurn || isAnimating || !boardRef.current) return;
@@ -403,9 +438,12 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     const x = e.clientX - rect.left - rect.width / 2;
     const y = e.clientY - rect.top - rect.height / 2;
     
-    // Check if within play area
-    const distanceFromCenter = Math.sqrt(x * x + y * y);
-    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+    // Check if within play area using squared distance for performance
+    const distanceSquared = x * x + y * y;
+    const maxDistanceSquared = Math.pow(PLAY_AREA_RADIUS - STONE_RADIUS, 2);
+    
+    if (distanceSquared <= maxDistanceSquared) {
+      e.preventDefault(); // Prevent default to ensure we capture all events
       setDraggingStone({ x, y });
       setShowPlacementIndicator(true);
       setIndicatorPos({ x, y });
@@ -463,6 +501,25 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     playSound(SOUNDS.placeStone);
   }, [draggingStone, onStonePlaced, playSound]);
 
+  // Handle stone placement on mouse up
+  const handleMouseUp = useCallback(() => {
+    if (!draggingStone) return;
+    
+    // Create a stable copy of the coordinates
+    const stonePosition = { x: draggingStone.x, y: draggingStone.y };
+    
+    // Reset UI state first
+    setDraggingStone(null);
+    setShowPlacementIndicator(false);
+    
+    // Then place the stone with a short delay to ensure UI resets
+    setTimeout(() => {
+      onStonePlaced(stonePosition.x, stonePosition.y);
+      playSound(SOUNDS.placeStone);
+    }, 10);
+  }, [draggingStone, onStonePlaced, playSound]);
+
+  // Improved mouse move handler
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingStone || !boardRef.current) return;
     
@@ -470,9 +527,11 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     const x = e.clientX - rect.left - rect.width / 2;
     const y = e.clientY - rect.top - rect.height / 2;
     
-    // Check if within play area
-    const distanceFromCenter = Math.sqrt(x * x + y * y);
-    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+    // Check if within play area using squared distance for performance
+    const distanceSquared = x * x + y * y;
+    const maxDistanceSquared = Math.pow(PLAY_AREA_RADIUS - STONE_RADIUS, 2);
+    
+    if (distanceSquared <= maxDistanceSquared) {
       setDraggingStone({ x, y });
       setShowPlacementIndicator(true);
       setIndicatorPos({ x, y });
@@ -480,17 +539,6 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       setShowPlacementIndicator(false);
     }
   }, [draggingStone]);
-
-  const handleMouseUp = useCallback(() => {
-    if (!draggingStone) return;
-    
-    onStonePlaced(draggingStone.x, draggingStone.y);
-    setDraggingStone(null);
-    setShowPlacementIndicator(false);
-    
-    // Play stone placement sound
-    playSound(SOUNDS.placeStone);
-  }, [draggingStone, onStonePlaced, playSound]);
 
   // Calculate angle for clustering animation
   const getClusterAngle = useCallback((stone: Stone): number => {
@@ -515,42 +563,21 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     height: `${PLAY_AREA_RADIUS * 2}px`
   }), []);
 
-  // Split stone rendering to a separate memoized component
-  const Stones = useMemo(() => {
-    return stones.map(stone => {
-      const isClusteredStone = clusteredStones.some(s => s.id === stone.id);
-      const isNearCluster = nearClusterStones.some(s => s.id === stone.id);
-      const playerId = stone.player.id === 0 ? 1 : 2; // Fix for player class naming
-      const stoneClass = `stone player-${playerId} ${
-        stone.onEdge ? 'on-edge' : ''
-      } ${isClusteredStone ? 'clustered' : ''} ${
-        isNearCluster ? 'pre-cluster' : ''
-      }`;
-
-      // Use absolute positioning from the center of the game board
-      const stoneStyle: React.CSSProperties = {
-        left: `calc(50% + ${stone.x}px)`,
-        top: `calc(50% + ${stone.y}px)`,
-        width: `${STONE_RADIUS * 2}px`,
-        height: `${STONE_RADIUS * 2}px`
-      };
-      
-      if (isClusteredStone) {
-        stoneStyle['--cluster-angle' as any] = `${getClusterAngle(stone)}deg`;
-      }
-      
-      return (
-        <div
-          key={stone.id}
-          className={stoneClass}
-          style={stoneStyle}
-        />
-      );
-    });
+  // Render the stones list - using the dedicated Stone component
+  const StonesList = useMemo(() => {
+    return stones.map(stone => (
+      <StoneComponent 
+        key={stone.id}
+        stone={stone}
+        isClusteredStone={clusteredStones.some(s => s.id === stone.id)}
+        isNearCluster={nearClusterStones.some(s => s.id === stone.id)}
+        getClusterAngle={getClusterAngle}
+      />
+    ));
   }, [stones, clusteredStones, nearClusterStones, getClusterAngle]);
 
-  // Optimize dragging stone rendering
-  const DraggingStone = useMemo(() => {
+  // Dragging stone preview - more reliable rendering
+  const DraggingStonePreview = useMemo(() => {
     if (!draggingStone) return null;
     
     return (
@@ -628,11 +655,11 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       {/* Magnetic field visualization */}
       {MagneticField}
       
-      {/* Stones */}
-      {Stones}
+      {/* Stones list */}
+      {StonesList}
       
       {/* Dragging stone preview */}
-      {DraggingStone}
+      {DraggingStonePreview}
       
       {/* Touch placement indicator */}
       {PlacementIndicator}
