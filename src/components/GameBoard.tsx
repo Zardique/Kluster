@@ -400,10 +400,8 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     if (!isMyTurn || isAnimating || !boardRef.current) return;
     
     const rect = boardRef.current.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const x = e.clientX - rect.left - centerX;
-    const y = e.clientY - rect.top - centerY;
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
     
     // Check if within play area
     const distanceFromCenter = Math.sqrt(x * x + y * y);
@@ -419,11 +417,9 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     if (!isMyTurn || isAnimating || !boardRef.current) return;
     
     const rect = boardRef.current.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
     const touch = e.touches[0];
-    const x = touch.clientX - rect.left - centerX;
-    const y = touch.clientY - rect.top - centerY;
+    const x = touch.clientX - rect.left - rect.width / 2;
+    const y = touch.clientY - rect.top - rect.height / 2;
     
     // Check if within play area
     const distanceFromCenter = Math.sqrt(x * x + y * y);
@@ -441,11 +437,9 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     if (!draggingStone || !boardRef.current) return;
     
     const rect = boardRef.current.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
     const touch = e.touches[0];
-    const x = touch.clientX - rect.left - centerX;
-    const y = touch.clientY - rect.top - centerY;
+    const x = touch.clientX - rect.left - rect.width / 2;
+    const y = touch.clientY - rect.top - rect.height / 2;
     
     // Check if within play area
     const distanceFromCenter = Math.sqrt(x * x + y * y);
@@ -473,10 +467,8 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     if (!draggingStone || !boardRef.current) return;
     
     const rect = boardRef.current.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const x = e.clientX - rect.left - centerX;
-    const y = e.clientY - rect.top - centerY;
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
     
     // Check if within play area
     const distanceFromCenter = Math.sqrt(x * x + y * y);
