@@ -7,7 +7,7 @@ const createAudio = (path: string) => {
   try {
     const audio = new Audio(path);
     audio.load();
-    audio.volume = 0.5;
+    audio.volume = 0.2; // Lower default volume for milder sounds
     return audio;
   } catch (e) {
     console.error(`Failed to load audio: ${path}`, e);
@@ -16,7 +16,7 @@ const createAudio = (path: string) => {
       play: () => Promise.resolve(),
       pause: () => {},
       currentTime: 0,
-      volume: 0.5,
+      volume: 0.2,
       load: () => {}
     } as HTMLAudioElement;
   }
@@ -274,7 +274,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       if (stones.length >= 2 && !isMagneticSoundPlaying.current && soundsLoaded.current) {
         try {
           SOUNDS.magnetic.loop = true;
-          SOUNDS.magnetic.volume = 0.2; // Lower volume for background sound
+          SOUNDS.magnetic.volume = 0.1; // Lower volume for magnetic sound
           SOUNDS.magnetic.play().catch(e => console.log("Error playing magnetic sound:", e));
           isMagneticSoundPlaying.current = true;
         } catch (e) {
@@ -360,19 +360,20 @@ const GameBoard: React.FC<GameBoardProps> = ({
     
     if (boardRef.current) {
       const rect = boardRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left - rect.width / 2;
-      const y = e.clientY - rect.top - rect.height / 2;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      const x = e.clientX - rect.left - centerX;
+      const y = e.clientY - rect.top - centerY;
       
       // Check if within play area
       const distanceFromCenter = Math.sqrt(x * x + y * y);
       if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
         setDraggingStone({ x, y });
         
-        // Play stone placement sound
-        playSound(SOUNDS.placeStone);
+        // Do not play sound here, play it when stone is actually placed
       }
     }
-  }, [isMyTurn, isAnimating, playSound]);
+  }, [isMyTurn, isAnimating]);
 
   // Touch event handlers for mobile support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -380,9 +381,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
     
     if (boardRef.current) {
       const rect = boardRef.current.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
       const touch = e.touches[0];
-      const x = touch.clientX - rect.left - rect.width / 2;
-      const y = touch.clientY - rect.top - rect.height / 2;
+      const x = touch.clientX - rect.left - centerX;
+      const y = touch.clientY - rect.top - centerY;
       
       // Check if within play area
       const distanceFromCenter = Math.sqrt(x * x + y * y);
@@ -401,9 +404,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (!draggingStone || !boardRef.current) return;
     
     const rect = boardRef.current.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
     const touch = e.touches[0];
-    const x = touch.clientX - rect.left - rect.width / 2;
-    const y = touch.clientY - rect.top - rect.height / 2;
+    const x = touch.clientX - rect.left - centerX;
+    const y = touch.clientY - rect.top - centerY;
     
     // Check if within play area
     const distanceFromCenter = Math.sqrt(x * x + y * y);
@@ -436,8 +441,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
     if (!draggingStone || !boardRef.current) return;
     
     const rect = boardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const x = e.clientX - rect.left - centerX;
+    const y = e.clientY - rect.top - centerY;
     
     // Check if within play area
     const distanceFromCenter = Math.sqrt(x * x + y * y);
@@ -540,10 +547,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
             key={stone.id}
             className={stoneClass}
             style={{
-              left: stone.x + 'px',
-              top: stone.y + 'px',
-              width: STONE_RADIUS * 2 + 'px',
-              height: STONE_RADIUS * 2 + 'px',
+              left: `${stone.x}px`,
+              top: `${stone.y}px`,
+              width: `${STONE_RADIUS * 2}px`,
+              height: `${STONE_RADIUS * 2}px`,
+              transform: `translate(-50%, -50%)`,
               ...(isClusteredStone 
                 ? { '--cluster-angle': `${getClusterAngle(stone)}deg` } as React.CSSProperties
                 : {})
@@ -557,10 +565,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
         <div
           className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
           style={{
-            left: draggingStone.x + 'px',
-            top: draggingStone.y + 'px',
-            width: STONE_RADIUS * 2 + 'px',
-            height: STONE_RADIUS * 2 + 'px'
+            left: `${draggingStone.x}px`,
+            top: `${draggingStone.y}px`,
+            width: `${STONE_RADIUS * 2}px`,
+            height: `${STONE_RADIUS * 2}px`,
+            transform: `translate(-50%, -50%)`
           }}
         />
       )}
@@ -570,8 +579,9 @@ const GameBoard: React.FC<GameBoardProps> = ({
         <div 
           className="placement-indicator" 
           style={{
-            left: indicatorPos.x + 'px',
-            top: indicatorPos.y + 'px',
+            left: `${indicatorPos.x}px`,
+            top: `${indicatorPos.y}px`,
+            transform: `translate(-50%, -50%)`,
             borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
           }}
         />

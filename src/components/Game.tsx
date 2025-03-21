@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import GameBoard from './GameBoard';
 import PlayerInfo from './PlayerInfo';
 import Lobby from './Lobby';
@@ -11,6 +11,31 @@ const STONE_RADIUS = 25;
 const STONE_HEIGHT = 8; // Height of the stone when placed flat
 const INITIAL_STONES_PER_PLAYER = 12; // 24 stones divided equally between 2 players
 const PLAYER_COLORS = ['#6e8efb', '#f6d365']; // Updated colors to match our modern UI
+
+// Create and preload sound effects
+const createAudio = (path: string) => {
+  try {
+    const audio = new Audio(path);
+    audio.load();
+    audio.volume = 0.2; // Lower volume for milder sounds
+    return audio;
+  } catch (e) {
+    console.error(`Failed to load audio: ${path}`, e);
+    return {
+      play: () => Promise.resolve(),
+      pause: () => {},
+      currentTime: 0,
+      volume: 0.2,
+      load: () => {}
+    } as HTMLAudioElement;
+  }
+};
+
+// Game sounds
+const GAME_SOUNDS = {
+  placeStone: createAudio('/sounds/place-stone.mp3'),
+  gameOver: createAudio('/sounds/game-over.mp3')
+};
 
 // Check if we're in development mode (Vite sets this)
 const isDevelopment = import.meta.env.DEV;
@@ -28,6 +53,7 @@ const Game: React.FC = () => {
   const [lastPlacedStoneId, setLastPlacedStoneId] = useState<string | null>(null);
   const [showLobby, setShowLobby] = useState(true);
   const [processingCluster, setProcessingCluster] = useState(false);
+  const soundsLoaded = useRef<boolean>(false);
   
   // Get multiplayer context
   const {
@@ -43,6 +69,41 @@ const Game: React.FC = () => {
     requestRematch
   } = useMultiplayer();
   
+  // Preload sounds on component mount
+  useEffect(() => {
+    const loadSounds = async () => {
+      try {
+        // Force a load attempt on all sounds
+        await Promise.all(Object.values(GAME_SOUNDS).map(sound => {
+          if (typeof sound.load === 'function') {
+            sound.load();
+          }
+          return Promise.resolve();
+        }));
+        soundsLoaded.current = true;
+      } catch (e) {
+        console.error("Failed to load game sounds:", e);
+      }
+    };
+    
+    loadSounds();
+  }, []);
+  
+  // Safely play a sound with error handling
+  const playSound = useCallback((sound: HTMLAudioElement) => {
+    try {
+      sound.currentTime = 0;
+      const playPromise = sound.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+          console.log("Error playing sound:", e);
+        });
+      }
+    } catch (e) {
+      console.error("Failed to play sound:", e);
+    }
+  }, []);
+  
   // Check if any player has won (has 0 stones left)
   const checkGameOver = useCallback((updatedPlayers: Player[]) => {
     for (let i = 0; i < updatedPlayers.length; i++) {
@@ -51,12 +112,8 @@ const Game: React.FC = () => {
         setWinner(i);
         
         // Play game over sound
-        try {
-          const gameOverSound = new Audio('/sounds/game-over.mp3');
-          gameOverSound.volume = 0.6;
-          gameOverSound.play().catch(e => console.error("Error playing game over sound:", e));
-        } catch (e) {
-          console.error("Failed to play game over sound:", e);
+        if (soundsLoaded.current) {
+          playSound(GAME_SOUNDS.gameOver);
         }
         
         // Notify other players about the game over
@@ -68,7 +125,7 @@ const Game: React.FC = () => {
       }
     }
     return false;
-  }, [playerId, isInRoom, notifyGameOver]);
+  }, [playerId, isInRoom, notifyGameOver, playSound]);
   
   // Listen for stone placement events from the server
   useEffect(() => {
@@ -78,6 +135,11 @@ const Game: React.FC = () => {
       // Only handle stone placement if it's from the other player
       if (data.playerId !== playerId) {
         handleStonePlace(data.x, data.y, true);
+        
+        // Play stone placement sound when the opponent places a stone
+        if (soundsLoaded.current) {
+          playSound(GAME_SOUNDS.placeStone);
+        }
       }
     });
     
@@ -103,6 +165,11 @@ const Game: React.FC = () => {
       // Handle game over
       setGameOver(true);
       setWinner(data.winner);
+      
+      // Play game over sound
+      if (soundsLoaded.current) {
+        playSound(GAME_SOUNDS.gameOver);
+      }
     });
     
     socket.on('rematch_accepted', (data: { gameState: any }) => {
@@ -117,7 +184,7 @@ const Game: React.FC = () => {
       socket.off('game_ended');
       socket.off('rematch_accepted');
     };
-  }, [socket, playerId, processingCluster]);
+  }, [socket, playerId, processingCluster, playSound, soundsLoaded]);
   
   // Handle stone placement
   const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
@@ -141,6 +208,11 @@ const Game: React.FC = () => {
     // Add the stone to the board
     setStones(prevStones => [...prevStones, newStone]);
     setLastPlacedStoneId(newStone.id);
+    
+    // Play stone placement sound for local placements
+    if (!fromServer && soundsLoaded.current) {
+      playSound(GAME_SOUNDS.placeStone);
+    }
     
     // Update the current player's stones left and check for win
     let gameEnded = false;
@@ -166,6 +238,11 @@ const Game: React.FC = () => {
     if (gameEnded && winningPlayer !== null) {
       setGameOver(true);
       setWinner(winningPlayer);
+      
+      // Play game over sound
+      if (soundsLoaded.current) {
+        playSound(GAME_SOUNDS.gameOver);
+      }
       
       // Notify other players about the game over
       if (playerId !== null && isInRoom) {
@@ -197,7 +274,7 @@ const Game: React.FC = () => {
         winner: gameEnded ? winningPlayer : null
       });
     }
-  }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, updateGameState, notifyGameOver]);
+  }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, updateGameState, notifyGameOver, playSound, soundsLoaded]);
   
   // Handle clustered stones
   const handleCluster = useCallback((clusteredStones: Stone[], fromServer = false) => {
@@ -289,6 +366,22 @@ const Game: React.FC = () => {
   // Handle starting the game from the lobby
   const handleStartGame = useCallback(() => {
     setShowLobby(false);
+  }, []);
+
+  // Clean up sounds on component unmount
+  useEffect(() => {
+    return () => {
+      try {
+        Object.values(GAME_SOUNDS).forEach(sound => {
+          if (typeof sound.pause === 'function') {
+            sound.pause();
+            sound.currentTime = 0;
+          }
+        });
+      } catch (e) {
+        console.error("Failed to clean up sounds:", e);
+      }
+    };
   }, []);
   
   return (

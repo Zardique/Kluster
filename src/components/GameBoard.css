@@ -82,11 +82,11 @@
     opacity: 1;
   }
   60% {
-    transform: translate3d(calc(cos(var(--cluster-angle, 0deg)) * 20px), calc(sin(var(--cluster-angle, 0deg)) * 20px), 0) scale(0.8) rotate(10deg);
+    transform: translate(-50%, -50%) translate3d(calc(cos(var(--cluster-angle, 0deg)) * 20px), calc(sin(var(--cluster-angle, 0deg)) * 20px), 0) scale(0.8) rotate(10deg);
     opacity: 0.8;
   }
   100% {
-    transform: translate3d(calc(cos(var(--cluster-angle, 0deg)) * 40px), calc(sin(var(--cluster-angle, 0deg)) * 40px), 0) scale(0.5) rotate(20deg);
+    transform: translate(-50%, -50%) translate3d(calc(cos(var(--cluster-angle, 0deg)) * 40px), calc(sin(var(--cluster-angle, 0deg)) * 40px), 0) scale(0.5) rotate(20deg);
     opacity: 0;
   }
 }
