@@ -646,6 +646,6 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       {PlacementIndicator}
     </div>
   );
-}));
+});
 
 export default GameBoard; 
