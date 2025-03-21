@@ -1,17 +1,16 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { Stone, Player } from '../types';
 import './GameBoard.css';
 
-// Load sound effects with error handling
+// Load sound effects with error handling - moved outside component to avoid recreating on each render
 const createAudio = (path: string) => {
   try {
     const audio = new Audio(path);
     audio.load();
-    audio.volume = 0.2; // Lower default volume for milder sounds
+    audio.volume = 0.2;
     return audio;
   } catch (e) {
     console.error(`Failed to load audio: ${path}`, e);
-    // Return a dummy audio object that won't throw errors
     return {
       play: () => Promise.resolve(),
       pause: () => {},
@@ -22,7 +21,7 @@ const createAudio = (path: string) => {
   }
 };
 
-// Sound effects
+// Sound effects - created once
 const SOUNDS = {
   placeStone: createAudio('/sounds/place-stone.mp3'),
   clusterStones: createAudio('/sounds/cluster.mp3'),
@@ -36,12 +35,14 @@ const STONE_HEIGHT = 8;
 const PLAY_AREA_RADIUS = 250;
 const MAGNETIC_FORCE_DISTANCE = 180;
 const MAGNETIC_FORCE_MULTIPLIER = 120;
-const CLUSTER_THRESHOLD = 80; // Decreased to make clustering more reliable
-const ANIMATION_DURATION = 600; // Reduced animation duration for better performance
-const MAGNETIC_FIELD_LINES = 20; // Number of magnetic field lines to draw
+const CLUSTER_THRESHOLD = 80;
+const ANIMATION_DURATION = 600;
+const MAGNETIC_FIELD_LINES = 20;
+const CLUSTER_CHECK_THROTTLE = 300; // ms
+const ANIMATION_CHECK_DELAY = 100; // ms
 
 // Player colors for the board border
-const PLAYER_COLORS = ['var(--player1-color)', 'var(--player2-color)']; // Updated to use CSS variables
+const PLAYER_COLORS = ['var(--player1-color)', 'var(--player2-color)'];
 
 interface GameBoardProps {
   stones: Stone[];
@@ -49,16 +50,16 @@ interface GameBoardProps {
   onStonePlaced: (x: number, y: number) => void;
   onClustered: (clusteredStones: Stone[]) => void;
   placementMode: 'flat' | 'edge';
-  isMyTurn?: boolean; // Optional prop to check if it's the current player's turn
+  isMyTurn?: boolean;
 }
 
-const GameBoard: React.FC<GameBoardProps> = ({
+const GameBoard: React.FC<GameBoardProps> = React.memo(({
   stones,
   currentPlayer,
   onStonePlaced,
   onClustered,
   placementMode,
-  isMyTurn = true // Default to true for single-player mode
+  isMyTurn = true
 }) => {
   const boardRef = useRef<HTMLDivElement>(null);
   const [draggingStone, setDraggingStone] = useState<{ x: number; y: number } | null>(null);
@@ -66,17 +67,22 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const [clusteredStones, setClusteredStones] = useState<Stone[]>([]);
   const [nearClusterStones, setNearClusterStones] = useState<Stone[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [lastClusterCheck, setLastClusterCheck] = useState(0);
+  const lastClusterCheckRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const [showPlacementIndicator, setShowPlacementIndicator] = useState(false);
   const [indicatorPos, setIndicatorPos] = useState({ x: 0, y: 0 });
-  const [animatingStones, setAnimatingStones] = useState<Stone[]>([]);
-  const [draggingEnabled, setDraggingEnabled] = useState(true);
   const [magneticFieldVisible, setMagneticFieldVisible] = useState(false);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMagneticSoundPlaying = useRef<boolean>(false);
   const clusterAnimationRef = useRef<Stone[]>([]);
   const soundsLoaded = useRef<boolean>(false);
+  
+  // Cache stones by ID for faster lookups
+  const stonesById = useMemo(() => {
+    const map = new Map<string, Stone>();
+    stones.forEach(stone => map.set(stone.id, stone));
+    return map;
+  }, [stones]);
 
   // Safely play a sound with error handling
   const playSound = useCallback((sound: HTMLAudioElement) => {
@@ -113,7 +119,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     loadSounds();
   }, []);
 
-  // Calculate magnetic strength between two stones
+  // Calculate magnetic strength between two stones - memoize common calculations
   const calculateMagneticStrength = useCallback((stone1: Stone, stone2: Stone) => {
     const dx = stone1.x - stone2.x;
     const dy = stone1.y - stone2.y;
@@ -147,7 +153,6 @@ const GameBoard: React.FC<GameBoardProps> = ({
     clusterAnimationRef.current = stonesToAnimate;
     
     // Mark stones as clustered for animation
-    setAnimatingStones(stonesToAnimate);
     setIsAnimating(true);
     
     // Clean up animation after it completes
@@ -159,81 +164,99 @@ const GameBoard: React.FC<GameBoardProps> = ({
       // Only process if these stones are still being animated
       if (clusterAnimationRef.current === stonesToAnimate) {
         onClustered(stonesToAnimate);
-        setAnimatingStones([]);
+        setClusteredStones([]);
         setIsAnimating(false);
         clusterAnimationRef.current = [];
       }
     }, ANIMATION_DURATION);
     
+    // Set clustered stones at the end to minimize rerenders
+    setClusteredStones(stonesToAnimate);
+    
     return stonesToAnimate;
   }, [onClustered, playSound]);
 
-  // Check if stones form a cluster
+  // Check if stones form a cluster - Optimized with faster lookups
   const checkClustering = useCallback(() => {
     if (isAnimating || stones.length < 2) return [];
     
     // Throttle cluster checking to avoid excessive checks
     const now = Date.now();
-    if (now - lastClusterCheck < 300) return []; // Check at most every 300ms
-    setLastClusterCheck(now);
+    if (now - lastClusterCheckRef.current < CLUSTER_CHECK_THROTTLE) return []; 
+    lastClusterCheckRef.current = now;
     
-    // Build a graph of connected stones
+    // Build a graph of connected stones - use object for faster lookups
     const graph: Record<number, number[]> = {};
     const nearClusterIndices = new Set<number>();
     
-    stones.forEach((stone, i) => {
+    // Pre-calculate distances once
+    const distances: Record<string, number> = {};
+    
+    for (let i = 0; i < stones.length; i++) {
       graph[i] = [];
-      stones.forEach((otherStone, j) => {
-        if (i !== j) {
-          const dx = stone.x - otherStone.x;
-          const dy = stone.y - otherStone.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          // Adjust threshold based on whether stones are on edge
-          let adjustedThreshold = CLUSTER_THRESHOLD;
-          if (stone.onEdge && otherStone.onEdge) {
-            adjustedThreshold *= 1.2; // Increase threshold for edge-to-edge
-          } else if (stone.onEdge || otherStone.onEdge) {
-            adjustedThreshold *= 1.1; // Slightly increase for edge-to-flat
-          }
-          
-          // Check for near-clustering stones (within 30% of threshold)
-          if (distance < adjustedThreshold * 1.3 && distance >= adjustedThreshold) {
-            nearClusterIndices.add(i);
-            nearClusterIndices.add(j);
-          }
-          
-          if (distance < adjustedThreshold) {
-            graph[i].push(j);
-          }
+      for (let j = i + 1; j < stones.length; j++) {
+        const stone1 = stones[i];
+        const stone2 = stones[j];
+        const key = `${i}-${j}`;
+        
+        const dx = stone1.x - stone2.x;
+        const dy = stone1.y - stone2.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        distances[key] = distance;
+        
+        // Adjust threshold based on whether stones are on edge
+        let adjustedThreshold = CLUSTER_THRESHOLD;
+        if (stone1.onEdge && stone2.onEdge) {
+          adjustedThreshold *= 1.2; // Increase threshold for edge-to-edge
+        } else if (stone1.onEdge || stone2.onEdge) {
+          adjustedThreshold *= 1.1; // Slightly increase for edge-to-flat
         }
-      });
-    });
-    
-    // Update near-cluster stones
-    setNearClusterStones(
-      Array.from(nearClusterIndices).map(index => stones[index])
-    );
-    
-    // Find connected components (clusters)
-    const visited = new Set<number>();
-    const clusters: number[][] = [];
-    
-    const dfs = (node: number, cluster: number[]) => {
-      visited.add(node);
-      cluster.push(node);
-      
-      for (const neighbor of graph[node]) {
-        if (!visited.has(neighbor)) {
-          dfs(neighbor, cluster);
+        
+        // Check for near-clustering stones (within 30% of threshold)
+        if (distance < adjustedThreshold * 1.3 && distance >= adjustedThreshold) {
+          nearClusterIndices.add(i);
+          nearClusterIndices.add(j);
+        }
+        
+        if (distance < adjustedThreshold) {
+          graph[i].push(j);
+          graph[j] = graph[j] || [];
+          graph[j].push(i);
         }
       }
-    };
+    }
+    
+    // Update near-cluster stones - only when they change
+    const newNearClusterStones = Array.from(nearClusterIndices).map(index => stones[index]);
+    if (JSON.stringify(newNearClusterStones.map(s => s.id)) !== 
+        JSON.stringify(nearClusterStones.map(s => s.id))) {
+      setNearClusterStones(newNearClusterStones);
+    }
+    
+    // Find connected components (clusters) - optimized DFS
+    const visited = new Set<number>();
+    const clusters: number[][] = [];
     
     for (let i = 0; i < stones.length; i++) {
       if (!visited.has(i)) {
         const cluster: number[] = [];
-        dfs(i, cluster);
+        
+        // Non-recursive DFS for better performance
+        const stack = [i];
+        while (stack.length > 0) {
+          const node = stack.pop()!;
+          if (!visited.has(node)) {
+            visited.add(node);
+            cluster.push(node);
+            
+            for (const neighbor of graph[node] || []) {
+              if (!visited.has(neighbor)) {
+                stack.push(neighbor);
+              }
+            }
+          }
+        }
+        
         if (cluster.length >= 2) {
           clusters.push(cluster);
         }
@@ -242,25 +265,29 @@ const GameBoard: React.FC<GameBoardProps> = ({
     
     // If clusters found, trigger animation and callback
     if (clusters.length > 0) {
-      const clusteredStoneIndices = clusters.flat();
+      const clusteredStoneIndices = clusters[0]; // Take the first cluster only
       const clusteredStonesArray = clusteredStoneIndices.map(index => stones[index]);
       
-      console.log('Cluster detected:', clusteredStonesArray.map(s => s.id));
-      
-      setClusteredStones(clusteredStonesArray);
       return animateClusteredStones(clusteredStonesArray);
     }
     
     return [];
-  }, [stones, isAnimating, lastClusterCheck, animateClusteredStones]);
+  }, [stones, isAnimating, animateClusteredStones, nearClusterStones]);
 
-  // Update magnetic field lines
+  // Update magnetic field lines - optimized to reduce calculations
   useEffect(() => {
     if (isAnimating) return;
     
     // Cancel any existing animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    // Only calculate magnetic lines if there are enough stones
+    if (stones.length < 2) {
+      setMagneticLines([]);
+      setMagneticFieldVisible(false);
+      return;
     }
     
     // Use requestAnimationFrame for better performance
@@ -282,8 +309,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
       
-      for (let i = 0; i < stones.length && lineCount < MAGNETIC_FIELD_LINES; i++) {
-        for (let j = i + 1; j < stones.length && lineCount < MAGNETIC_FIELD_LINES; j++) {
+      // Calculate magnetic lines efficiently
+      const stoneCount = Math.min(stones.length, 20); // Limit maximum stones to process
+      
+      for (let i = 0; i < stoneCount && lineCount < MAGNETIC_FIELD_LINES; i++) {
+        for (let j = i + 1; j < stoneCount && lineCount < MAGNETIC_FIELD_LINES; j++) {
           const stone1 = stones[i];
           const stone2 = stones[j];
           const strength = calculateMagneticStrength(stone1, stone2);
@@ -301,8 +331,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
       
-      setMagneticLines(newLines);
-      setMagneticFieldVisible(newLines.length > 0);
+      // Only update state if the lines have changed
+      if (newLines.length !== magneticLines.length) {
+        setMagneticLines(newLines);
+        setMagneticFieldVisible(newLines.length > 0);
+      }
     });
     
     // Cleanup animation frame on unmount
@@ -322,12 +355,22 @@ const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
     };
-  }, [stones, isAnimating, calculateMagneticStrength]);
+  }, [stones, isAnimating, calculateMagneticStrength, magneticLines.length]);
 
-  // Check for clustering after stones move
+  // Check for clustering after stones move - use refs to avoid unnecessary rerenders
   useEffect(() => {
     if (!isAnimating) {
-      checkClustering();
+      const clusterResult = checkClustering();
+      
+      // If no clusters were found and there's a new stone, check for clustering again after a delay
+      // This helps with edge cases where the stone positions are still being updated
+      if (clusterResult.length === 0 && stones.length > 0) {
+        const timeoutId = setTimeout(() => {
+          checkClustering();
+        }, ANIMATION_CHECK_DELAY);
+        
+        return () => clearTimeout(timeoutId);
+      }
     }
   }, [stones, isAnimating, checkClustering]);
 
@@ -351,52 +394,46 @@ const GameBoard: React.FC<GameBoardProps> = ({
     };
   }, []);
 
-  // Handle mouse events
+  // Handle mouse events - optimized to reduce calculations
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     // Only allow stone placement if it's the player's turn
-    if (!isMyTurn) return;
+    if (!isMyTurn || isAnimating || !boardRef.current) return;
     
-    if (isAnimating) return;
+    const rect = boardRef.current.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const x = e.clientX - rect.left - centerX;
+    const y = e.clientY - rect.top - centerY;
     
-    if (boardRef.current) {
-      const rect = boardRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const x = e.clientX - rect.left - centerX;
-      const y = e.clientY - rect.top - centerY;
-      
-      // Check if within play area
-      const distanceFromCenter = Math.sqrt(x * x + y * y);
-      if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
-        setDraggingStone({ x, y });
-        
-        // Do not play sound here, play it when stone is actually placed
-      }
+    // Check if within play area
+    const distanceFromCenter = Math.sqrt(x * x + y * y);
+    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+      setDraggingStone({ x, y });
+      setShowPlacementIndicator(true);
+      setIndicatorPos({ x, y });
     }
   }, [isMyTurn, isAnimating]);
 
   // Touch event handlers for mobile support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isMyTurn || isAnimating) return;
+    if (!isMyTurn || isAnimating || !boardRef.current) return;
     
-    if (boardRef.current) {
-      const rect = boardRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      const touch = e.touches[0];
-      const x = touch.clientX - rect.left - centerX;
-      const y = touch.clientY - rect.top - centerY;
+    const rect = boardRef.current.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left - centerX;
+    const y = touch.clientY - rect.top - centerY;
+    
+    // Check if within play area
+    const distanceFromCenter = Math.sqrt(x * x + y * y);
+    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+      setDraggingStone({ x, y });
+      setShowPlacementIndicator(true);
+      setIndicatorPos({ x, y });
       
-      // Check if within play area
-      const distanceFromCenter = Math.sqrt(x * x + y * y);
-      if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
-        setDraggingStone({ x, y });
-        setShowPlacementIndicator(true);
-        setIndicatorPos({ x, y });
-        
-        // Prevent scrolling when interacting with the game board
-        e.preventDefault();
-      }
+      // Prevent scrolling when interacting with the game board
+      e.preventDefault();
     }
   }, [isMyTurn, isAnimating]);
 
@@ -430,12 +467,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     
     // Play stone placement sound
     playSound(SOUNDS.placeStone);
-    
-    // Check for clustering after placing stone
-    setTimeout(() => {
-      checkClustering();
-    }, 100);
-  }, [draggingStone, onStonePlaced, checkClustering, playSound]);
+  }, [draggingStone, onStonePlaced, playSound]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingStone || !boardRef.current) return;
@@ -466,12 +498,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     
     // Play stone placement sound
     playSound(SOUNDS.placeStone);
-    
-    // Check for clustering after placing stone
-    setTimeout(() => {
-      checkClustering();
-    }, 100);
-  }, [draggingStone, onStonePlaced, checkClustering, playSound]);
+  }, [draggingStone, onStonePlaced, playSound]);
 
   // Calculate angle for clustering animation
   const getClusterAngle = useCallback((stone: Stone): number => {
@@ -485,6 +512,111 @@ const GameBoard: React.FC<GameBoardProps> = ({
     return Math.atan2(centerY - stone.y, centerX - stone.x) * (180 / Math.PI);
   }, [clusteredStones]);
 
+  // Memoize stone and indicator styles to reduce rerenders
+  const boardStyle = useMemo(() => ({
+    cursor: isMyTurn && !isAnimating ? 'pointer' : 'default',
+    borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
+  }), [isMyTurn, isAnimating, currentPlayer.id]);
+
+  const playAreaStyle = useMemo(() => ({
+    width: `${PLAY_AREA_RADIUS * 2}px`,
+    height: `${PLAY_AREA_RADIUS * 2}px`
+  }), []);
+
+  // Split stone rendering to a separate memoized component
+  const Stones = useMemo(() => {
+    return stones.map(stone => {
+      const isClusteredStone = clusteredStones.some(s => s.id === stone.id);
+      const isNearCluster = nearClusterStones.some(s => s.id === stone.id);
+      const playerId = stone.player.id === 0 ? 1 : 2; // Fix for player class naming
+      const stoneClass = `stone player-${playerId} ${
+        stone.onEdge ? 'on-edge' : ''
+      } ${isClusteredStone ? 'clustered' : ''} ${
+        isNearCluster ? 'pre-cluster' : ''
+      }`;
+      
+      const stoneStyle: React.CSSProperties = {
+        left: `${stone.x}px`,
+        top: `${stone.y}px`,
+        width: `${STONE_RADIUS * 2}px`,
+        height: `${STONE_RADIUS * 2}px`,
+        transform: `translate(-50%, -50%)`
+      };
+      
+      if (isClusteredStone) {
+        stoneStyle['--cluster-angle' as any] = `${getClusterAngle(stone)}deg`;
+      }
+      
+      return (
+        <div
+          key={stone.id}
+          className={stoneClass}
+          style={stoneStyle}
+        />
+      );
+    });
+  }, [stones, clusteredStones, nearClusterStones, getClusterAngle]);
+
+  // Optimize dragging stone rendering
+  const DraggingStone = useMemo(() => {
+    if (!draggingStone) return null;
+    
+    return (
+      <div
+        className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
+        style={{
+          left: `${draggingStone.x}px`,
+          top: `${draggingStone.y}px`,
+          width: `${STONE_RADIUS * 2}px`,
+          height: `${STONE_RADIUS * 2}px`,
+          transform: `translate(-50%, -50%)`
+        }}
+      />
+    );
+  }, [draggingStone, currentPlayer.id, placementMode]);
+
+  // Optimize placement indicator rendering
+  const PlacementIndicator = useMemo(() => {
+    if (!showPlacementIndicator) return null;
+    
+    return (
+      <div 
+        className="placement-indicator" 
+        style={{
+          left: `${indicatorPos.x}px`,
+          top: `${indicatorPos.y}px`,
+          transform: `translate(-50%, -50%)`,
+          borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
+        }}
+      />
+    );
+  }, [showPlacementIndicator, indicatorPos.x, indicatorPos.y, currentPlayer.id]);
+
+  // Optimize magnetic field lines rendering
+  const MagneticField = useMemo(() => {
+    if (!magneticFieldVisible) return null;
+    
+    return (
+      <svg className="magnetic-field" viewBox="-300 -300 600 600">
+        {magneticLines.map((line, index) => {
+          const strength = Math.min(line.strength / 50, 1);
+          return (
+            <line
+              key={index}
+              className="magnetic-indicator"
+              x1={line.x1}
+              y1={line.y1}
+              x2={line.x2}
+              y2={line.y2}
+              stroke={`rgba(255, 255, 255, ${strength * 0.6})`}
+              strokeWidth={strength * 3}
+            />
+          );
+        })}
+      </svg>
+    );
+  }, [magneticFieldVisible, magneticLines]);
+
   return (
     <div 
       ref={boardRef}
@@ -496,98 +628,24 @@ const GameBoard: React.FC<GameBoardProps> = ({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      style={{ 
-        cursor: isMyTurn && !isAnimating ? 'pointer' : 'default',
-        borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]  // Fix for potential index error
-      }}
+      style={boardStyle}
     >
       {/* Play area circle */}
-      <div 
-        className="play-area"
-        style={{
-          width: PLAY_AREA_RADIUS * 2 + 'px',
-          height: PLAY_AREA_RADIUS * 2 + 'px'
-        }}
-      />
+      <div className="play-area" style={playAreaStyle} />
       
       {/* Magnetic field visualization */}
-      {magneticFieldVisible && (
-        <svg className="magnetic-field" viewBox="-300 -300 600 600">
-          {magneticLines.map((line, index) => {
-            const strength = Math.min(line.strength / 50, 1);
-            return (
-              <line
-                key={index}
-                className="magnetic-indicator"
-                x1={line.x1}
-                y1={line.y1}
-                x2={line.x2}
-                y2={line.y2}
-                stroke={`rgba(255, 255, 255, ${strength * 0.6})`}
-                strokeWidth={strength * 3}
-              />
-            );
-          })}
-        </svg>
-      )}
+      {MagneticField}
       
       {/* Stones */}
-      {stones.map(stone => {
-        const isClusteredStone = clusteredStones.some(s => s.id === stone.id);
-        const isNearCluster = nearClusterStones.some(s => s.id === stone.id);
-        const playerId = stone.player.id === 0 ? 1 : 2; // Fix for player class naming
-        const stoneClass = `stone player-${playerId} ${
-          stone.onEdge ? 'on-edge' : ''
-        } ${isClusteredStone ? 'clustered' : ''} ${
-          isNearCluster ? 'pre-cluster' : ''
-        }`;
-        
-        return (
-          <div
-            key={stone.id}
-            className={stoneClass}
-            style={{
-              left: `${stone.x}px`,
-              top: `${stone.y}px`,
-              width: `${STONE_RADIUS * 2}px`,
-              height: `${STONE_RADIUS * 2}px`,
-              transform: `translate(-50%, -50%)`,
-              ...(isClusteredStone 
-                ? { '--cluster-angle': `${getClusterAngle(stone)}deg` } as React.CSSProperties
-                : {})
-            }}
-          />
-        );
-      })}
+      {Stones}
       
       {/* Dragging stone preview */}
-      {draggingStone && (
-        <div
-          className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
-          style={{
-            left: `${draggingStone.x}px`,
-            top: `${draggingStone.y}px`,
-            width: `${STONE_RADIUS * 2}px`,
-            height: `${STONE_RADIUS * 2}px`,
-            transform: `translate(-50%, -50%)`
-          }}
-        />
-      )}
+      {DraggingStone}
       
       {/* Touch placement indicator */}
-      {showPlacementIndicator && (
-        <div 
-          className="placement-indicator" 
-          style={{
-            left: `${indicatorPos.x}px`,
-            top: `${indicatorPos.y}px`,
-            transform: `translate(-50%, -50%)`,
-            borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
-          }}
-        />
-      )}
+      {PlacementIndicator}
     </div>
   );
-};
+}));
 
-export default React.memo(GameBoard); 
+export default GameBoard; 

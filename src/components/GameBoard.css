@@ -7,6 +7,8 @@
   align-items: center;
   transform: translateZ(0);
   will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .play-area {
@@ -14,6 +16,7 @@
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   z-index: 1;
+  will-change: transform;
 }
 
 .stone {
@@ -22,9 +25,12 @@
   border-radius: 50%;
   box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 5px 15px rgba(0, 0, 0, 0.4);
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease-out;
-  will-change: transform, box-shadow;
+  will-change: transform, box-shadow, opacity;
   z-index: 10;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .stone.player-1 {
@@ -58,7 +64,7 @@
   background: linear-gradient(135deg, #f9e198, #f5ca54);
 }
 
-/* Clustering animation */
+/* Clustering animation - optimized with hardware acceleration hints */
 .stone.pre-cluster {
   animation: pre-cluster-pulse 0.6s ease-in-out infinite;
   z-index: 15;
@@ -71,14 +77,14 @@
 }
 
 @keyframes pre-cluster-pulse {
-  0% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.1); }
-  100% { transform: translate(-50%, -50%) scale(1); }
+  0% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
+  50% { transform: translate(-50%, -50%) scale(1.1) translateZ(0); }
+  100% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
 }
 
 @keyframes cluster-animation {
   0% {
-    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    transform: translate(-50%, -50%) scale(1) rotate(0deg) translateZ(0);
     opacity: 1;
   }
   60% {
@@ -91,7 +97,7 @@
   }
 }
 
-/* Magnetic field visualization */
+/* Magnetic field visualization - optimized for performance */
 .magnetic-field {
   position: absolute;
   top: 0;
@@ -100,12 +106,13 @@
   height: 100%;
   pointer-events: none;
   z-index: 5;
+  will-change: opacity;
 }
 
 .magnetic-indicator {
   animation: magnetic-pulse 1.5s ease-in-out infinite;
   transform-origin: center;
-  will-change: opacity, stroke-width;
+  will-change: opacity, stroke-width, stroke-dashoffset;
   stroke-dasharray: 5 3;
 }
 
@@ -115,7 +122,7 @@
   100% { opacity: 0.3; stroke-dashoffset: 16; }
 }
 
-/* Placement indicator */
+/* Placement indicator - optimized for performance */
 .placement-indicator {
   position: absolute;
   width: 50px;
@@ -126,15 +133,16 @@
   z-index: 5;
   pointer-events: none;
   animation: pulse 2s infinite ease-in-out;
+  will-change: transform, opacity;
 }
 
 @keyframes pulse {
-  0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.5; }
-  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; }
-  100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.5; }
+  0% { transform: translate(-50%, -50%) scale(0.9) translateZ(0); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) scale(1.1) translateZ(0); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(0.9) translateZ(0); opacity: 0.5; }
 }
 
-/* Magnetic field background */
+/* Magnetic field background - simplified for better performance */
 .magnetic-field {
   position: absolute;
   width: 100%;
@@ -142,148 +150,56 @@
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 70%);
   pointer-events: none;
+  will-change: opacity;
 }
 
-/* Magnetic field lines */
-.magnetic-field-line {
-  position: absolute;
-  pointer-events: none;
-  z-index: 5;
-  filter: blur(2px);
-  box-shadow: 0 0 5px var(--player-color);
-  opacity: 0.7;
-  will-change: transform, opacity;
-}
-
-/* Stone styles */
-.stone {
-  position: absolute;
-  border-radius: 50%;
-  z-index: 10;
-  transition: box-shadow 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000), 
-              transform 0.3s cubic-bezier(0.215, 0.610, 0.355, 1.000);
-  transform-origin: center center;
-  background-color: #111;
-  background-image: 
-    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4) 0%, rgba(0, 0, 0, 0) 70%),
-    radial-gradient(circle at 70% 70%, rgba(50, 50, 50, 1) 0%, rgba(0, 0, 0, 0) 70%);
-  box-shadow: 
-    0 2px 5px rgba(0, 0, 0, 0.5), 
-    0 0 20px rgba(50, 50, 50, 0.5),
-    inset 0 0 10px rgba(255, 255, 255, 0.1);
-  will-change: transform, box-shadow;
-}
-
-.stone.flat {
-  transform: translateZ(0);
-}
-
-/* Add a pulsing effect to stones that are close to clustering */
-@keyframes pre-cluster-pulse {
-  0% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), 0 0 20px var(--player-color); }
-  50% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), 0 0 40px var(--player-color); }
-  100% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), 0 0 20px var(--player-color); }
-}
-
-.stone.near-cluster {
-  animation: pre-cluster-pulse 1.2s infinite cubic-bezier(0.215, 0.610, 0.355, 1.000);
-}
-
-/* Optimized animations */
-@keyframes pulse {
-  0% { transform: scale3d(1, 1, 1); opacity: 1; }
-  50% { transform: scale3d(1.3, 1.3, 1); opacity: 0.8; }
-  100% { transform: scale3d(0, 0, 1); opacity: 0; }
-}
-
-.stone.clustered {
-  animation: pulse 600ms cubic-bezier(0.215, 0.610, 0.355, 1.000) forwards;
-  z-index: 20;
-  box-shadow: 0 0 30px var(--player-color);
-  will-change: transform, opacity;
-}
-
-@keyframes magnetic-pulse {
-  0% { opacity: 0.7; }
-  50% { opacity: 1; }
-  100% { opacity: 0.7; }
-}
-
-/* Grid pattern for the board */
-.board-grid {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background-image: 
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 20px 20px;
-  pointer-events: none;
-}
-
-/* Board center marker */
-.board-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-  pointer-events: none;
-}
-
-/* Concentric circles */
-.concentric-circle {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  pointer-events: none;
-}
-
-.circle-1 {
-  width: 100px;
-  height: 100px;
-}
-
-.circle-2 {
-  width: 200px;
-  height: 200px;
-}
-
-.circle-3 {
-  width: 300px;
-  height: 300px;
-}
-
-.circle-4 {
-  width: 400px;
-  height: 400px;
+/* Performance optimizations for animations */
+@media (prefers-reduced-motion: reduce) {
+  .stone, .stone.pre-cluster, .stone.clustered, .magnetic-indicator, .placement-indicator {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
   .game-board,
   .magnetic-field,
-  .magnetic-field-line,
   .stone {
     transform: translateZ(0);
     will-change: transform;
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
   
-  .stone.flat {
-    transform: translateZ(0);
+  /* Reduce animation complexity on mobile */
+  @keyframes pre-cluster-pulse {
+    0% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
+    50% { transform: translate(-50%, -50%) scale(1.05) translateZ(0); }
+    100% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
   }
   
-  @keyframes pulse {
-    0% { transform: scale3d(1, 1, 1) translateZ(0); opacity: 1; }
-    50% { transform: scale3d(1.3, 1.3, 1) translateZ(0); opacity: 0.8; }
-    100% { transform: scale3d(0, 0, 1) translateZ(0); opacity: 0; }
+  @keyframes cluster-animation {
+    0% {
+      transform: translate(-50%, -50%) scale(1) translateZ(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(0) translateZ(0);
+      opacity: 0;
+    }
+  }
+  
+  /* Simpler magnetic indicators on mobile */
+  .magnetic-indicator {
+    stroke-dasharray: none;
+    animation: none;
+    opacity: 0.4;
+  }
+  
+  /* Optimize touch interaction */
+  .stone {
+    touch-action: none;
   }
 } 
