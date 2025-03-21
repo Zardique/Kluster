@@ -520,7 +520,10 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
 
   const playAreaStyle = useMemo(() => ({
     width: `${PLAY_AREA_RADIUS * 2}px`,
-    height: `${PLAY_AREA_RADIUS * 2}px`
+    height: `${PLAY_AREA_RADIUS * 2}px`,
+    transform: 'translate(-50%, -50%)',
+    left: '50%',
+    top: '50%'
   }), []);
 
   // Split stone rendering to a separate memoized component
@@ -535,13 +538,17 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
         isNearCluster ? 'pre-cluster' : ''
       }`;
       
+      // Position is relative to center, so we need to adjust for rendering
       const stoneStyle: React.CSSProperties = {
-        left: `${stone.x}px`,
-        top: `${stone.y}px`,
+        left: '50%',
+        top: '50%',
         width: `${STONE_RADIUS * 2}px`,
         height: `${STONE_RADIUS * 2}px`,
-        transform: `translate(-50%, -50%)`
-      };
+        transform: `translate(calc(-50% + ${stone.x}px), calc(-50% + ${stone.y}px))`,
+        // Add CSS variables for animation
+        '--x': `${stone.x}px`,
+        '--y': `${stone.y}px`
+      } as React.CSSProperties;
       
       if (isClusteredStone) {
         stoneStyle['--cluster-angle' as any] = `${getClusterAngle(stone)}deg`;
@@ -565,12 +572,14 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div
         className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
         style={{
-          left: `${draggingStone.x}px`,
-          top: `${draggingStone.y}px`,
+          left: '50%',
+          top: '50%',
           width: `${STONE_RADIUS * 2}px`,
           height: `${STONE_RADIUS * 2}px`,
-          transform: `translate(-50%, -50%)`
-        }}
+          transform: `translate(calc(-50% + ${draggingStone.x}px), calc(-50% + ${draggingStone.y}px))`,
+          '--x': `${draggingStone.x}px`,
+          '--y': `${draggingStone.y}px`
+        } as React.CSSProperties}
       />
     );
   }, [draggingStone, currentPlayer.id, placementMode]);
@@ -583,11 +592,15 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div 
         className="placement-indicator" 
         style={{
-          left: `${indicatorPos.x}px`,
-          top: `${indicatorPos.y}px`,
-          transform: `translate(-50%, -50%)`,
-          borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
-        }}
+          left: '50%',
+          top: '50%',
+          width: `${STONE_RADIUS * 2}px`,
+          height: `${STONE_RADIUS * 2}px`,
+          transform: `translate(calc(-50% + ${indicatorPos.x}px), calc(-50% + ${indicatorPos.y}px))`,
+          borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1],
+          '--x': `${indicatorPos.x}px`,
+          '--y': `${indicatorPos.y}px`
+        } as React.CSSProperties}
       />
     );
   }, [showPlacementIndicator, indicatorPos.x, indicatorPos.y, currentPlayer.id]);
