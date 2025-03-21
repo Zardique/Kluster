@@ -50,6 +50,15 @@ const Game: React.FC = () => {
         setGameOver(true);
         setWinner(i);
         
+        // Play game over sound
+        try {
+          const gameOverSound = new Audio('/sounds/game-over.mp3');
+          gameOverSound.volume = 0.6;
+          gameOverSound.play().catch(e => console.error("Error playing game over sound:", e));
+        } catch (e) {
+          console.error("Failed to play game over sound:", e);
+        }
+        
         // Notify other players about the game over
         if (playerId !== null && isInRoom) {
           notifyGameOver(i);
@@ -205,15 +214,13 @@ const Game: React.FC = () => {
     // Count clustered stones
     let clusteredStonesCount = clusteredStones.length;
     
-    // Remove clustered stones from the board
-    setStones(prevStones => 
-      prevStones.filter(stone => !clusteredStones.some(cs => cs.id === stone.id))
-    );
+    // Remove clustered stones from the board with stoneIds
+    setStones(prevStones => {
+      const stoneIdsToRemove = new Set(clusteredStones.map(s => s.id));
+      return prevStones.filter(stone => !stoneIdsToRemove.has(stone.id));
+    });
     
     // Update the player who placed the last stone - they get all clustered stones
-    let gameEnded = false;
-    let winningPlayer: number | null = null;
-    
     setPlayers(prevPlayers => {
       const updatedPlayers = [...prevPlayers];
       

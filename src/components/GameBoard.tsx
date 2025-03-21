@@ -2,28 +2,33 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Stone, Player } from '../types';
 import './GameBoard.css';
 
-// Load sound effects
-const SOUNDS = {
-  placeStone: new Audio('/sounds/place-stone.mp3'),
-  clusterStones: new Audio('/sounds/cluster.mp3'),
-  gameOver: new Audio('/sounds/game-over.mp3'),
-  magnetic: new Audio('/sounds/magnetic-field.mp3')
+// Load sound effects with error handling
+const createAudio = (path: string) => {
+  try {
+    const audio = new Audio(path);
+    audio.load();
+    audio.volume = 0.5;
+    return audio;
+  } catch (e) {
+    console.error(`Failed to load audio: ${path}`, e);
+    // Return a dummy audio object that won't throw errors
+    return {
+      play: () => Promise.resolve(),
+      pause: () => {},
+      currentTime: 0,
+      volume: 0.5,
+      load: () => {}
+    } as HTMLAudioElement;
+  }
 };
 
-// Preload sounds
-Object.values(SOUNDS).forEach(sound => {
-  sound.load();
-  sound.volume = 0.5; // Set default volume to 50%
-});
-
-interface GameBoardProps {
-  stones: Stone[];
-  currentPlayer: Player;
-  onStonePlaced: (x: number, y: number) => void;
-  onClustered: (clusteredStones: Stone[]) => void;
-  placementMode: 'flat' | 'edge';
-  isMyTurn?: boolean; // Optional prop to check if it's the current player's turn
-}
+// Sound effects
+const SOUNDS = {
+  placeStone: createAudio('/sounds/place-stone.mp3'),
+  clusterStones: createAudio('/sounds/cluster.mp3'),
+  gameOver: createAudio('/sounds/game-over.mp3'),
+  magnetic: createAudio('/sounds/magnetic-field.mp3')
+};
 
 // Constants for magnetic simulation
 const STONE_RADIUS = 25;
@@ -37,6 +42,15 @@ const MAGNETIC_FIELD_LINES = 20; // Number of magnetic field lines to draw
 
 // Player colors for the board border
 const PLAYER_COLORS = ['var(--player1-color)', 'var(--player2-color)']; // Updated to use CSS variables
+
+interface GameBoardProps {
+  stones: Stone[];
+  currentPlayer: Player;
+  onStonePlaced: (x: number, y: number) => void;
+  onClustered: (clusteredStones: Stone[]) => void;
+  placementMode: 'flat' | 'edge';
+  isMyTurn?: boolean; // Optional prop to check if it's the current player's turn
+}
 
 const GameBoard: React.FC<GameBoardProps> = ({
   stones,
@@ -62,6 +76,42 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMagneticSoundPlaying = useRef<boolean>(false);
   const clusterAnimationRef = useRef<Stone[]>([]);
+  const soundsLoaded = useRef<boolean>(false);
+
+  // Safely play a sound with error handling
+  const playSound = useCallback((sound: HTMLAudioElement) => {
+    try {
+      sound.currentTime = 0;
+      const playPromise = sound.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+          console.log("Error playing sound:", e);
+        });
+      }
+    } catch (e) {
+      console.error("Failed to play sound:", e);
+    }
+  }, []);
+
+  // Preload sounds on component mount
+  useEffect(() => {
+    const loadSounds = async () => {
+      try {
+        // Force a load attempt on all sounds
+        await Promise.all(Object.values(SOUNDS).map(sound => {
+          if (typeof sound.load === 'function') {
+            sound.load();
+          }
+          return Promise.resolve();
+        }));
+        soundsLoaded.current = true;
+      } catch (e) {
+        console.error("Failed to load sounds:", e);
+      }
+    };
+    
+    loadSounds();
+  }, []);
 
   // Calculate magnetic strength between two stones
   const calculateMagneticStrength = useCallback((stone1: Stone, stone2: Stone) => {
@@ -88,11 +138,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
   // Animate clustered stones with sound effects
   const animateClusteredStones = useCallback((stonesToAnimate: Stone[]) => {
-    if (stonesToAnimate.length === 0) return;
+    if (stonesToAnimate.length === 0) return [];
     
     // Play clustering sound
-    SOUNDS.clusterStones.currentTime = 0;
-    SOUNDS.clusterStones.play().catch(e => console.log("Error playing cluster sound:", e));
+    playSound(SOUNDS.clusterStones);
     
     // Store ref to track which stones are animating
     clusterAnimationRef.current = stonesToAnimate;
@@ -117,7 +166,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
     }, ANIMATION_DURATION);
     
     return stonesToAnimate;
-  }, [onClustered]);
+  }, [onClustered, playSound]);
 
   // Check if stones form a cluster
   const checkClustering = useCallback(() => {
@@ -199,8 +248,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       console.log('Cluster detected:', clusteredStonesArray.map(s => s.id));
       
       setClusteredStones(clusteredStonesArray);
-      animateClusteredStones(clusteredStonesArray);
-      return clusteredStonesArray;
+      return animateClusteredStones(clusteredStonesArray);
     }
     
     return [];
@@ -222,12 +270,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
       // Limit the number of lines to improve performance
       let lineCount = 0;
       
-      // Play magnetic sound when there are potential lines
-      if (stones.length >= 2 && !isMagneticSoundPlaying.current) {
-        SOUNDS.magnetic.loop = true;
-        SOUNDS.magnetic.volume = 0.2; // Lower volume for background sound
-        SOUNDS.magnetic.play().catch(e => console.log("Error playing magnetic sound:", e));
-        isMagneticSoundPlaying.current = true;
+      // Play magnetic sound when there are potential lines and stones exist
+      if (stones.length >= 2 && !isMagneticSoundPlaying.current && soundsLoaded.current) {
+        try {
+          SOUNDS.magnetic.loop = true;
+          SOUNDS.magnetic.volume = 0.2; // Lower volume for background sound
+          SOUNDS.magnetic.play().catch(e => console.log("Error playing magnetic sound:", e));
+          isMagneticSoundPlaying.current = true;
+        } catch (e) {
+          console.error("Failed to play magnetic sound:", e);
+        }
       }
       
       for (let i = 0; i < stones.length && lineCount < MAGNETIC_FIELD_LINES; i++) {
@@ -261,9 +313,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
       
       // Stop magnetic sound
       if (isMagneticSoundPlaying.current) {
-        SOUNDS.magnetic.pause();
-        SOUNDS.magnetic.currentTime = 0;
-        isMagneticSoundPlaying.current = false;
+        try {
+          SOUNDS.magnetic.pause();
+          SOUNDS.magnetic.currentTime = 0;
+          isMagneticSoundPlaying.current = false;
+        } catch (e) {
+          console.error("Failed to stop magnetic sound:", e);
+        }
       }
     };
   }, [stones, isAnimating, calculateMagneticStrength]);
@@ -278,10 +334,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
   // Clean up sounds on component unmount
   useEffect(() => {
     return () => {
-      Object.values(SOUNDS).forEach(sound => {
-        sound.pause();
-        sound.currentTime = 0;
-      });
+      try {
+        Object.values(SOUNDS).forEach(sound => {
+          if (typeof sound.pause === 'function') {
+            sound.pause();
+            sound.currentTime = 0;
+          }
+        });
+      } catch (e) {
+        console.error("Failed to clean up sounds:", e);
+      }
       
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
@@ -307,11 +369,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
         setDraggingStone({ x, y });
         
         // Play stone placement sound
-        SOUNDS.placeStone.currentTime = 0;
-        SOUNDS.placeStone.play().catch(e => console.log("Error playing place sound:", e));
+        playSound(SOUNDS.placeStone);
       }
     }
-  }, [isMyTurn, isAnimating]);
+  }, [isMyTurn, isAnimating, playSound]);
 
   // Touch event handlers for mobile support
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -363,14 +424,13 @@ const GameBoard: React.FC<GameBoardProps> = ({
     setShowPlacementIndicator(false);
     
     // Play stone placement sound
-    SOUNDS.placeStone.currentTime = 0;
-    SOUNDS.placeStone.play().catch(e => console.log("Error playing place sound:", e));
+    playSound(SOUNDS.placeStone);
     
     // Check for clustering after placing stone
     setTimeout(() => {
       checkClustering();
     }, 100);
-  }, [draggingStone, onStonePlaced, checkClustering]);
+  }, [draggingStone, onStonePlaced, checkClustering, playSound]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingStone || !boardRef.current) return;
@@ -383,6 +443,10 @@ const GameBoard: React.FC<GameBoardProps> = ({
     const distanceFromCenter = Math.sqrt(x * x + y * y);
     if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
       setDraggingStone({ x, y });
+      setShowPlacementIndicator(true);
+      setIndicatorPos({ x, y });
+    } else {
+      setShowPlacementIndicator(false);
     }
   }, [draggingStone]);
 
@@ -391,12 +455,16 @@ const GameBoard: React.FC<GameBoardProps> = ({
     
     onStonePlaced(draggingStone.x, draggingStone.y);
     setDraggingStone(null);
+    setShowPlacementIndicator(false);
+    
+    // Play stone placement sound
+    playSound(SOUNDS.placeStone);
     
     // Check for clustering after placing stone
     setTimeout(() => {
       checkClustering();
     }, 100);
-  }, [draggingStone, onStonePlaced, checkClustering]);
+  }, [draggingStone, onStonePlaced, checkClustering, playSound]);
 
   // Calculate angle for clustering animation
   const getClusterAngle = useCallback((stone: Stone): number => {
@@ -423,7 +491,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       onTouchEnd={handleTouchEnd}
       style={{ 
         cursor: isMyTurn && !isAnimating ? 'pointer' : 'default',
-        borderColor: PLAYER_COLORS[currentPlayer.id - 1]
+        borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]  // Fix for potential index error
       }}
     >
       {/* Play area circle */}
@@ -460,7 +528,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
       {stones.map(stone => {
         const isClusteredStone = clusteredStones.some(s => s.id === stone.id);
         const isNearCluster = nearClusterStones.some(s => s.id === stone.id);
-        const stoneClass = `stone player-${stone.player.id} ${
+        const playerId = stone.player.id === 0 ? 1 : 2; // Fix for player class naming
+        const stoneClass = `stone player-${playerId} ${
           stone.onEdge ? 'on-edge' : ''
         } ${isClusteredStone ? 'clustered' : ''} ${
           isNearCluster ? 'pre-cluster' : ''
@@ -486,7 +555,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       {/* Dragging stone preview */}
       {draggingStone && (
         <div
-          className={`stone player-${currentPlayer.id} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
+          className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
           style={{
             left: draggingStone.x + 'px',
             top: draggingStone.y + 'px',
@@ -503,7 +572,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
           style={{
             left: indicatorPos.x + 'px',
             top: indicatorPos.y + 'px',
-            borderColor: PLAYER_COLORS[currentPlayer.id - 1]
+            borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
           }}
         />
       )}
