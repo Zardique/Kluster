@@ -17,6 +17,9 @@
   border-radius: 50%;
   z-index: 1;
   will-change: transform;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .stone {
@@ -30,6 +33,7 @@
   -webkit-tap-highlight-color: transparent;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  transform: translate(-50%, -50%);
 }
 
 .stone.player-1 {
@@ -52,7 +56,7 @@
 /* Stone on edge (tilted) */
 .stone.on-edge {
   box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 3px 8px 15px rgba(0, 0, 0, 0.5);
-  transform: rotate(5deg) translateZ(0) !important;
+  transform: translate(-50%, -50%) rotate(5deg) translateZ(0);
 }
 
 .stone.player-1.on-edge {
@@ -76,22 +80,22 @@
 }
 
 @keyframes pre-cluster-pulse {
-  0% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1) translateZ(0); }
-  50% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1.1) translateZ(0); }
-  100% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1) translateZ(0); }
+  0% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
+  50% { transform: translate(-50%, -50%) scale(1.1) translateZ(0); }
+  100% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
 }
 
 @keyframes cluster-animation {
   0% {
-    transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1) rotate(0deg) translateZ(0);
+    transform: translate(-50%, -50%) scale(1) rotate(0deg) translateZ(0);
     opacity: 1;
   }
   60% {
-    transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) translate3d(calc(cos(var(--cluster-angle, 0deg)) * 20px), calc(sin(var(--cluster-angle, 0deg)) * 20px), 0) scale(0.8) rotate(10deg);
+    transform: translate(-50%, -50%) translate3d(calc(cos(var(--cluster-angle, 0deg)) * 20px), calc(sin(var(--cluster-angle, 0deg)) * 20px), 0) scale(0.8) rotate(10deg);
     opacity: 0.8;
   }
   100% {
-    transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) translate3d(calc(cos(var(--cluster-angle, 0deg)) * 40px), calc(sin(var(--cluster-angle, 0deg)) * 40px), 0) scale(0.5) rotate(20deg);
+    transform: translate(-50%, -50%) translate3d(calc(cos(var(--cluster-angle, 0deg)) * 40px), calc(sin(var(--cluster-angle, 0deg)) * 40px), 0) scale(0.5) rotate(20deg);
     opacity: 0;
   }
 }
@@ -124,8 +128,11 @@
 /* Placement indicator - optimized for performance */
 .placement-indicator {
   position: absolute;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: 2px dashed;
+  transform: translate(-50%, -50%);
   z-index: 5;
   pointer-events: none;
   animation: pulse 2s infinite ease-in-out;
@@ -133,9 +140,9 @@
 }
 
 @keyframes pulse {
-  0% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(0.9) translateZ(0); opacity: 0.5; }
-  50% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1.1) translateZ(0); opacity: 0.8; }
-  100% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(0.9) translateZ(0); opacity: 0.5; }
+  0% { transform: translate(-50%, -50%) scale(0.9) translateZ(0); opacity: 0.5; }
+  50% { transform: translate(-50%, -50%) scale(1.1) translateZ(0); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(0.9) translateZ(0); opacity: 0.5; }
 }
 
 /* Magnetic field background - simplified for better performance */
@@ -171,18 +178,18 @@
   
   /* Reduce animation complexity on mobile */
   @keyframes pre-cluster-pulse {
-    0% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1) translateZ(0); }
-    50% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1.05) translateZ(0); }
-    100% { transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1) translateZ(0); }
+    0% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
+    50% { transform: translate(-50%, -50%) scale(1.05) translateZ(0); }
+    100% { transform: translate(-50%, -50%) scale(1) translateZ(0); }
   }
   
   @keyframes cluster-animation {
     0% {
-      transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(1) translateZ(0);
+      transform: translate(-50%, -50%) scale(1) translateZ(0);
       opacity: 1;
     }
     100% {
-      transform: translate(calc(-50% + var(--x, 0px)), calc(-50% + var(--y, 0px))) scale(0) translateZ(0);
+      transform: translate(-50%, -50%) scale(0) translateZ(0);
       opacity: 0;
     }
   }
