@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Stone, Player } from '../types';
+import { standardizeStone, standardizeStones, createStoneKey, stoneIdToString } from '../utils/stoneUtils';
 import './GameBoard2D.css';
 
 // Constants for the game
@@ -30,10 +31,16 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
   
+  // Standardize stones to ensure consistent properties
+  const standardizedStones = useMemo(() => 
+    standardizeStones(stones),
+    [stones]
+  );
+  
   // Filter out clustered stones
   const visibleStones = useMemo(() => 
-    stones.filter(stone => !stone.clustered),
-    [stones]
+    standardizedStones.filter(stone => !stone.clustered),
+    [standardizedStones]
   );
   
   // Track stones that are being clustered for animation
@@ -56,7 +63,7 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     const stonesByPlayer = new Map<number, Stone[]>();
     
     visibleStones.forEach(stone => {
-      const playerId = stone.player.id;
+      const playerId = stone.playerId;
       if (!stonesByPlayer.has(playerId)) {
         stonesByPlayer.set(playerId, []);
       }
@@ -73,13 +80,14 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
       const clusters: string[][] = [];
       
       for (const stone of playerStones) {
-        if (visited.has(stone.id)) continue;
+        const stoneIdStr = stoneIdToString(stone.id);
+        if (visited.has(stoneIdStr)) continue;
         
         // Start a new cluster
         const cluster: string[] = [];
         const queue: Stone[] = [stone];
-        visited.add(stone.id);
-        cluster.push(stone.id);
+        visited.add(stoneIdStr);
+        cluster.push(stoneIdStr);
         
         // BFS to find all connected stones
         while (queue.length > 0) {
@@ -87,7 +95,8 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
           
           // Check all other stones of this player for proximity
           for (const otherStone of playerStones) {
-            if (visited.has(otherStone.id)) continue;
+            const otherStoneIdStr = stoneIdToString(otherStone.id);
+            if (visited.has(otherStoneIdStr)) continue;
             
             const dx = currentStone.x - otherStone.x;
             const dy = currentStone.y - otherStone.y;
@@ -95,10 +104,10 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
             
             // If stones are close enough to cluster
             if (distance < CLUSTER_THRESHOLD) {
-              visited.add(otherStone.id);
-              cluster.push(otherStone.id);
+              visited.add(otherStoneIdStr);
+              cluster.push(otherStoneIdStr);
               queue.push(otherStone);
-              console.log(`Stone ${currentStone.id} and ${otherStone.id} are clustering. Distance: ${distance}`);
+              console.log(`Stone ${stoneIdToString(currentStone.id)} and ${otherStoneIdStr} are clustering. Distance: ${distance}`);
             }
           }
         }
@@ -142,7 +151,7 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     const stonesByPlayer = new Map<number, Stone[]>();
     
     visibleStones.forEach(stone => {
-      const playerId = stone.player.id;
+      const playerId = stone.playerId;
       if (!stonesByPlayer.has(playerId)) {
         stonesByPlayer.set(playerId, []);
       }
@@ -170,11 +179,14 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
             
             // If they're very close, add magnetic pull effect
             if (distance < CLUSTER_THRESHOLD * 1.2) {
-              if (!potentialMagneticStones.includes(stone1.id)) {
-                potentialMagneticStones.push(stone1.id);
+              const stone1IdStr = stoneIdToString(stone1.id);
+              const stone2IdStr = stoneIdToString(stone2.id);
+              
+              if (!potentialMagneticStones.includes(stone1IdStr)) {
+                potentialMagneticStones.push(stone1IdStr);
               }
-              if (!potentialMagneticStones.includes(stone2.id)) {
-                potentialMagneticStones.push(stone2.id);
+              if (!potentialMagneticStones.includes(stone2IdStr)) {
+                potentialMagneticStones.push(stone2IdStr);
               }
             }
           }
@@ -393,19 +405,20 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
   // Render the stones with clustering and magnetic pull animations
   const renderStones = useMemo(() => {
     return visibleStones.map(stone => {
-      const isClusteringStone = clusteringStones.includes(stone.id);
-      const isMagneticPullStone = magneticPullStones.includes(stone.id) && !isClusteringStone;
+      const stoneIdStr = stoneIdToString(stone.id);
+      const isClusteringStone = clusteringStones.includes(stoneIdStr);
+      const isMagneticPullStone = magneticPullStones.includes(stoneIdStr) && !isClusteringStone;
       
       const stoneClassName = `
         stone
-        player-${stone.player.id}
+        player-${stone.playerId}
         ${isClusteringStone ? 'clustering' : ''}
         ${isMagneticPullStone ? 'magnetic-pull' : ''}
       `;
       
       return (
         <div
-          key={stone.id}
+          key={stoneIdStr}
           className={stoneClassName.trim()}
           style={{
             width: `${STONE_RADIUS * 2}px`,

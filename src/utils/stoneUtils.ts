@@ -1,4 +1,4 @@
-import { Stone } from '../types';
+import { Stone, Player } from '../types';
 
 /**
  * Standardizes a stone object to ensure it has all required properties
@@ -20,11 +20,30 @@ export function standardizeStone(stone: Partial<Stone>): Stone {
     normalizedId = stone.id;
   }
   
+  // Handle player/playerId conversion
+  let normalizedPlayerId: number;
+  if (stone.playerId !== undefined) {
+    normalizedPlayerId = stone.playerId;
+  } else if (stone.player !== undefined) {
+    if (typeof stone.player === 'object' && stone.player !== null) {
+      // It's a Player object
+      normalizedPlayerId = stone.player.id;
+    } else if (typeof stone.player === 'number') {
+      // It's a numeric player ID
+      normalizedPlayerId = stone.player;
+    } else {
+      // Default to player 0
+      normalizedPlayerId = 0;
+    }
+  } else {
+    normalizedPlayerId = 0;
+  }
+  
   // Create a new stone with default values
   const standardizedStone: Stone = {
     x: stone.x || 0,
     y: stone.y || 0,
-    playerId: stone.playerId ?? stone.player ?? 0,
+    playerId: normalizedPlayerId,
     id: normalizedId,
     radius: stone.radius ?? 25, // Default radius
     clustered: stone.clustered ?? false,

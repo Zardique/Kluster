@@ -185,7 +185,13 @@ const useGameState = ({ playAreaRadius }: UseGameStateProps) => {
       const updatedStones = [...prevState.stones];
       
       updates.forEach(update => {
-        const stoneIndex = updatedStones.findIndex(stone => stone.id === update.id);
+        // Convert string ID to number for comparison
+        const updateIdNum = parseInt(update.id, 10);
+        const stoneIndex = updatedStones.findIndex(stone => 
+          // Make sure we're comparing numbers to numbers
+          stone.id === updateIdNum
+        );
+        
         if (stoneIndex !== -1) {
           updatedStones[stoneIndex] = {
             ...updatedStones[stoneIndex],

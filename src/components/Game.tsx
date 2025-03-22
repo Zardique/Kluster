@@ -1,527 +1,288 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import GameBoard2D from './GameBoard2D';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import GameBoard from './GameBoard';
 import PlayerInfo from './PlayerInfo';
-import Lobby from './Lobby';
 import { Stone, Player } from '../types';
 import { useMultiplayer } from '../context/MultiplayerContext';
 import useDeviceDetect from '../hooks/useDeviceDetect';
+import { standardizeStone, stoneIdToString } from '../utils/stoneUtils';
 import './ModernUI.css';
 
-// Game constants
-const PLAY_AREA_RADIUS = 250;
-const STONE_RADIUS = 25;
-const STONE_HEIGHT = 10;
-const INITIAL_STONES_PER_PLAYER = 12;
-const PLAYER_COLORS = ['#6e8efb', '#f6d365'];
-const POINTS_PER_CLUSTER = 10;
-const POINTS_TO_WIN = 100;
+interface GameProps {
+  isMultiplayer?: boolean;
+}
 
-// Sound effects - moved outside component to avoid recreation
-const createAudio = (path: string) => {
-  try {
-    const audio = new Audio(path);
-    audio.load();
-    audio.volume = 0.2;
-    return audio;
-  } catch (e) {
-    console.error(`Failed to load audio: ${path}`, e);
-    return {
-      play: () => Promise.resolve(),
-      pause: () => {},
-      currentTime: 0,
-      volume: 0.2,
-      load: () => {}
-    } as HTMLAudioElement;
-  }
-};
-
-// Game sounds - created once
-const GAME_SOUNDS = {
-  placeStone: createAudio('/sounds/place-stone.mp3'),
-  gameOver: createAudio('/sounds/game-over.mp3')
-};
-
-const Game: React.FC = () => {
-  // Device detection for responsive design
+const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
   const { isMobile } = useDeviceDetect();
-  
-  // Game state
   const [stones, setStones] = useState<Stone[]>([]);
   const [players, setPlayers] = useState<Player[]>([
-    { id: 0, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 1' },
-    { id: 1, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 2' }
+    { id: 0, stonesLeft: 12, name: 'Player 1' },
+    { id: 1, stonesLeft: 12, name: 'Player 2' }
   ]);
-  const [currentPlayer, setCurrentPlayer] = useState(0);
+  const [currentPlayerId, setCurrentPlayerId] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState<number | null>(null);
-  const [showLobby, setShowLobby] = useState(true);
-  
-  // Refs for values that don't trigger renders
-  const lastPlacedStoneIdRef = useRef<string | null>(null);
-  const processingClusterRef = useRef<boolean>(false);
-  const soundsLoaded = useRef<boolean>(false);
+  const [winner, setWinner] = useState<Player | null>(null);
+  const [animatingStones, setAnimatingStones] = useState<Stone[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const [placementMode, setPlacementMode] = useState<'flat' | 'edge'>('flat');
   
   // Multiplayer context
-  const {
-    socket,
-    playerId,
-    isInRoom,
-    isGameStarted,
-    opponentConnected,
-    placeStone: emitPlaceStone,
-    updateGameState,
-    notifyCluster,
-    notifyGameOver,
-    requestRematch
-  } = useMultiplayer();
+  const multiplayer = useMultiplayer();
   
-  // Preload sounds on component mount
+  // Track if component is mounted
+  const isMounted = useRef(true);
   useEffect(() => {
-    const loadSounds = async () => {
-      try {
-        await Promise.all(Object.values(GAME_SOUNDS).map(sound => {
-          if (typeof sound.load === 'function') {
-            sound.load();
-          }
-          return Promise.resolve();
-        }));
-        soundsLoaded.current = true;
-      } catch (e) {
-        console.error("Failed to load game sounds:", e);
-      }
-    };
-    
-    loadSounds();
-    
-    // Clean up sounds on unmount
     return () => {
-      try {
-        Object.values(GAME_SOUNDS).forEach(sound => {
-          if (typeof sound.pause === 'function') {
-            sound.pause();
-            sound.currentTime = 0;
-          }
-        });
-      } catch (e) {
-        console.error("Failed to clean up sounds:", e);
-      }
+      isMounted.current = false;
     };
   }, []);
   
-  // Safely play a sound
-  const playSound = useCallback((sound: HTMLAudioElement) => {
-    try {
-      sound.currentTime = 0;
-      const playPromise = sound.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(e => {
-          console.log("Error playing sound:", e);
-        });
-      }
-    } catch (e) {
-      console.error("Failed to play sound:", e);
-    }
-  }, []);
+  // Get current player
+  const currentPlayer = players[currentPlayerId];
   
-  // Setup multiplayer event listeners
-  useEffect(() => {
-    if (!socket) return;
-    
-    const onStonePlaced = (data: { x: number, y: number, playerId: number }) => {
-      // Only handle stone placement if it's from the other player
-      if (data.playerId !== playerId) {
-        handleStonePlace(data.x, data.y, true);
-        
-        // Play sound
-        if (soundsLoaded.current) {
-          playSound(GAME_SOUNDS.placeStone);
-        }
-      }
-    };
-    
-    const onStonesClustered = (data: { clusteredStones: Stone[] }) => {
-      if (!processingClusterRef.current) {
-        const clusterIds = data.clusteredStones.map(stone => stone.id);
-        handleCluster(clusterIds);
-      }
-    };
-    
-    const onGameStateUpdated = (data: { gameState: any }) => {
-      const { stones, players, currentPlayer, gameOver, winner } = data.gameState;
-      setStones(stones);
-      setPlayers(players);
-      setCurrentPlayer(currentPlayer);
-      setGameOver(gameOver);
-      setWinner(winner);
-    };
-    
-    const onGameEnded = (data: { winner: number }) => {
-      setGameOver(true);
-      setWinner(data.winner);
-      
-      if (soundsLoaded.current) {
-        playSound(GAME_SOUNDS.gameOver);
-      }
-    };
-    
-    const onRematchAccepted = () => {
-      resetGame();
-    };
-    
-    // Set up event listeners
-    socket.on('stone_placed', onStonePlaced);
-    socket.on('stones_clustered', onStonesClustered);
-    socket.on('game_state_updated', onGameStateUpdated);
-    socket.on('game_ended', onGameEnded);
-    socket.on('rematch_accepted', onRematchAccepted);
-    
-    // Clean up event listeners
-    return () => {
-      socket.off('stone_placed', onStonePlaced);
-      socket.off('stones_clustered', onStonesClustered);
-      socket.off('game_state_updated', onGameStateUpdated);
-      socket.off('game_ended', onGameEnded);
-      socket.off('rematch_accepted', onRematchAccepted);
-    };
-  }, [socket, playerId, playSound]);
-  
-  // Handle stone placement
-  const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
-    console.log(`Placing stone at (${x}, ${y}), fromServer: ${fromServer}`);
-    
-    // If it's not our turn and not from the server, don't allow placement
-    if (!fromServer && playerId !== null && currentPlayer !== playerId) {
-      console.log("Not your turn", playerId, currentPlayer);
-      return;
-    }
-    
-    // Prevent placing stones if player has none left
-    if (players[currentPlayer].stonesLeft <= 0) {
-      console.log("No stones left for player", currentPlayer);
-      return;
-    }
-    
-    // Create a new stone with unique ID
-    const newStone: Stone = {
-      id: `stone_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      x,
-      y,
-      radius: STONE_RADIUS,
-      height: STONE_HEIGHT,
-      player: players[currentPlayer],
-      clustered: false,
-      onEdge: false
-    };
-    
-    // Add stone to the board
-    setStones(prevStones => [...prevStones, newStone]);
-    lastPlacedStoneIdRef.current = newStone.id;
-    
-    // Play stone placement sound
-    if (!fromServer && soundsLoaded.current) {
-      playSound(GAME_SOUNDS.placeStone);
-    }
-    
-    // Update player stones
-    setPlayers(prevPlayers => {
-      const newPlayers = prevPlayers.map((player, idx) => {
-        if (idx === currentPlayer) {
-          return {
-            ...player,
-            stonesLeft: Math.max(0, player.stonesLeft - 1)
-          };
-        }
-        return player;
-      });
-      
-      return newPlayers;
-    });
-    
-    // Determine if the game is over and handle accordingly
-    const willBeOutOfStones = players[currentPlayer].stonesLeft <= 1;
-    
-    if (willBeOutOfStones) {
-      setTimeout(() => {
-        // Indicate the game is over with the current player as winner
-        setGameOver(true);
-        setWinner(currentPlayer);
-        
-        if (soundsLoaded.current) {
-          playSound(GAME_SOUNDS.gameOver);
-        }
-        
-        // Notify in multiplayer mode
-        if (playerId !== null && isInRoom) {
-          notifyGameOver(currentPlayer);
-        }
-      }, 300);
-    } else {
-      // Switch to next player
-      const nextPlayer = (currentPlayer + 1) % players.length;
-      setCurrentPlayer(nextPlayer);
-      
-      // Update multiplayer state if this is a local move
-      if (!fromServer && playerId !== null && isInRoom) {
-        // Send stone placement event first to ensure immediate feedback
-        emitPlaceStone(x, y);
-        
-        // Then update full game state after a slight delay to ensure consistency
-        setTimeout(() => {
-          const updatedPlayers = players.map((player, idx) => {
-            if (idx === currentPlayer) {
-              return {
-                ...player,
-                stonesLeft: player.stonesLeft - 1
-              };
-            }
-            return player;
-          });
-          
-          const gameState = {
-            stones: [...stones, newStone],
-            players: updatedPlayers,
-            currentPlayer: nextPlayer,
-            gameOver: willBeOutOfStones,
-            winner: willBeOutOfStones ? currentPlayer : null
-          };
-          
-          updateGameState(gameState);
-        }, 50);
-      }
-    }
-  }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, 
-      updateGameState, notifyGameOver, playSound, soundsLoaded]);
-  
-  // Add a function to check game over conditions
-  const checkGameOverConditions = useCallback(() => {
-    // Check if any player has no stones left
-    const playerWithNoStones = players.findIndex(p => p.stonesLeft === 0);
-    if (playerWithNoStones !== -1) {
-      setGameOver(true);
-      setWinner(playerWithNoStones);
-      
-      if (soundsLoaded.current) {
-        playSound(GAME_SOUNDS.gameOver);
-      }
-      
-      if (playerId !== null && isInRoom) {
-        notifyGameOver(playerWithNoStones);
-      }
-    }
-  }, [players, setGameOver, setWinner, playerId, isInRoom, notifyGameOver, playSound, soundsLoaded]);
-  
-  // Handle clustered stones
-  const handleCluster = useCallback((clusteredStoneIds: string[]) => {
-    if (!clusteredStoneIds || clusteredStoneIds.length < 2) return;
-    
-    console.log('Handling cluster for stones:', clusteredStoneIds);
-    
-    // Prevent duplicate processing by using a ref
-    if (processingClusterRef.current) {
-      console.log('Already processing a cluster, skipping...');
-      return;
-    }
-    
-    processingClusterRef.current = true;
-    
-    // Find the clustered stones by their ids
-    const clusteredStones = stones.filter(stone => clusteredStoneIds.includes(stone.id));
-    
-    if (clusteredStones.length < 2) {
-      console.warn('Not enough stones found for clustering');
-      processingClusterRef.current = false;
-      return;
-    }
-    
-    // Get the player who owns these stones
-    const stonePlayer = clusteredStones[0].player;
-    
-    // Ensure all stones belong to the same player
-    const samePlayer = clusteredStones.every(stone => stone.player.id === stonePlayer.id);
-    if (!samePlayer) {
-      console.warn('Clustering stones belong to different players');
-      processingClusterRef.current = false;
-      return;
-    }
-    
-    // Determine the opponent who receives the stones (important: in Kluster, stones go to the opponent)
-    const opponentId = stonePlayer.id === 0 ? 1 : 0;
-    
-    // Remove the clustered stones from the board
-    setStones(prevStones => {
-      const remainingStones = prevStones.filter(stone => !clusteredStoneIds.includes(stone.id));
-      
-      // Play cluster sound effect (use a more dramatic sound for clustering)
-      if (soundsLoaded.current) {
-        playSound(GAME_SOUNDS.placeStone);
-      }
-      
-      // Notify the multiplayer context if available
-      if (notifyCluster && typeof notifyCluster === 'function' && playerId !== null && isInRoom) {
-        notifyCluster(clusteredStones);
-      }
-      
-      return remainingStones; // Don't add a new stone - stones get removed from board
-    });
-    
-    // Update opponent's stones - in Kluster, clustered stones go to the opponent
-    setPlayers(prevPlayers => 
-      prevPlayers.map(player => 
-        player.id === opponentId
-          ? { ...player, stonesLeft: player.stonesLeft + clusteredStones.length }
-          : player
-      )
-    );
-    
-    // Reset processing flag after a delay
-    setTimeout(() => {
-      processingClusterRef.current = false;
-      
-      // Check for game-ending conditions - in Kluster, first player to place all stones wins
-      // So we check if the player who lost their stones now has 0 stones left
-      const playerStones = players.find(p => p.id === stonePlayer.id)?.stonesLeft ?? 0;
-      
-      if (playerStones === 0 && !stones.some(s => s.player.id === stonePlayer.id && !clusteredStoneIds.includes(s.id))) {
-        setGameOver(true);
-        setWinner(stonePlayer.id);
-        
-        if (soundsLoaded.current) {
-          playSound(GAME_SOUNDS.gameOver);
-        }
-        
-        if (playerId !== null && isInRoom) {
-          notifyGameOver(stonePlayer.id);
-        }
-      }
-    }, 700);
-    
-  }, [stones, players, playerId, isInRoom, notifyCluster, notifyGameOver, playSound, soundsLoaded]);
-  
-  // Reset game state
-  const resetGame = useCallback(() => {
-    setStones([]);
-    setPlayers([
-      { id: 0, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 1' },
-      { id: 1, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 2' }
-    ]);
-    setCurrentPlayer(0);
-    setGameOver(false);
-    setWinner(null);
-    lastPlacedStoneIdRef.current = null;
-    processingClusterRef.current = false;
-    
-    // Request rematch if in multiplayer
-    if (playerId !== null && isInRoom) {
-      requestRematch();
-    }
-  }, [playerId, isInRoom, requestRematch]);
-  
-  // Handle starting the game from lobby
-  const handleStartGame = useCallback(() => {
-    setShowLobby(false);
-  }, []);
-  
-  // Memoize values for performance
-  const isMyTurn = useMemo(() => 
-    playerId === null || playerId === currentPlayer, 
-    [playerId, currentPlayer]
-  );
-  
-  // Debug logging
-  useEffect(() => {
-    console.log("Current player:", currentPlayer, "My Player ID:", playerId, "Is my turn:", isMyTurn);
-  }, [currentPlayer, playerId, isMyTurn]);
-  
-  // Adjust layout based on device
-  const gameContentClass = useMemo(() => 
-    isMobile ? "game-content game-content-mobile" : "game-content", 
-    [isMobile]
-  );
-  
-  // If user is on mobile, show a message instead of the game
+  // Handle mobile restriction
   if (isMobile) {
     return (
-      <div className="modern-container">
-        <div className="mobile-restriction">
+      <div className="desktop-only-message">
+        <div className="desktop-only-content">
           <h2>Desktop Only Game</h2>
-          <p>Sorry, Kluster is currently optimized for desktop browsers only.</p>
-          <p>Please visit this page on a desktop or laptop computer for the best experience.</p>
-          <div className="mobile-restriction-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-              <line x1="8" y1="21" x2="16" y2="21"></line>
-              <line x1="12" y1="17" x2="12" y2="21"></line>
-            </svg>
-          </div>
+          <p>Kluster is currently optimized for desktop browsers.</p>
+          <p>Please visit us from a desktop or laptop computer for the best experience.</p>
+          <div className="computer-icon">💻</div>
         </div>
       </div>
     );
   }
   
-  return (
-    <div className="modern-container">
-      {/* Animated background elements */}
-      <div className="bg-element bg-element-1"></div>
-      <div className="bg-element bg-element-2"></div>
-      <div className="bg-element bg-element-3"></div>
-      
-      {/* Show lobby if not in a game yet */}
-      {showLobby && !isGameStarted && (
-        <Lobby onStartGame={handleStartGame} />
-      )}
-      
-      {/* Game content */}
-      {(!showLobby || isGameStarted) && (
-        <div className={gameContentClass}>
-          {/* Game board */}
-          <div className="board-wrapper">
-            <div 
-              className="board-glow" 
-              style={{ 
-                background: currentPlayer === 0 
-                  ? 'rgba(110, 142, 251, 0.3)' 
-                  : 'rgba(246, 211, 101, 0.3)' 
-              }}
-            ></div>
-            <GameBoard2D
-              stones={stones}
-              playAreaRadius={isMobile ? PLAY_AREA_RADIUS * 0.8 : PLAY_AREA_RADIUS}
-              onStonePlace={handleStonePlace}
-              onCluster={handleCluster}
-              currentPlayer={players[currentPlayer]}
-              gameOver={gameOver}
-              isMobile={isMobile}
-            />
-          </div>
+  // Initialize multiplayer game state
+  useEffect(() => {
+    if (isMultiplayer && multiplayer) {
+      multiplayer.socket?.on('game_state_updated', ({ gameState }) => {
+        if (isMounted.current) {
+          setStones(gameState.stones);
+          setPlayers(gameState.players);
+          setCurrentPlayerId(gameState.currentPlayer);
+          setGameOver(gameState.gameOver);
           
-          {/* Player info */}
-          <PlayerInfo
-            players={players}
+          if (gameState.winner !== null) {
+            setWinner(gameState.players[gameState.winner]);
+          }
+        }
+      });
+      
+      multiplayer.socket?.on('game_start', ({ gameState }) => {
+        if (isMounted.current) {
+          setStones(gameState.stones);
+          setPlayers(gameState.players);
+          setCurrentPlayerId(gameState.currentPlayer);
+          setGameOver(gameState.gameOver);
+          setWinner(null);
+        }
+      });
+      
+      multiplayer.socket?.on('stone_placed', ({ x, y, playerId }) => {
+        if (isMounted.current) {
+          // Only add the stone if it's from the other player
+          // (our own stones are added directly)
+          if (multiplayer.playerId !== null && playerId !== multiplayer.playerId) {
+            const stone = standardizeStone({ x, y, playerId });
+            setStones(prev => [...prev, stone]);
+          }
+        }
+      });
+      
+      multiplayer.socket?.on('stones_clustered', ({ clusteredStones, magneticFields }) => {
+        if (isMounted.current) {
+          console.log("Received cluster notification from server", clusteredStones);
+          
+          // Set animating stones for visual effect
+          setAnimatingStones(clusteredStones);
+          setIsAnimating(true);
+          
+          // Display magnetic fields for visualization (can be implemented in GameBoard)
+          // This will show the invisible magnetic fields that caused the clustering
+          
+          // After animation completes, remove the stones
+          setTimeout(() => {
+            if (isMounted.current) {
+              // Remove clustered stones using coordinates instead of IDs
+              const clusterKeys = new Set(clusteredStones.map(s => `${s.x},${s.y}`));
+              setStones(prev => prev.filter(s => !clusterKeys.has(`${s.x},${s.y}`)));
+              
+              // Reset animation state
+              setAnimatingStones([]);
+              setIsAnimating(false);
+            }
+          }, 800); // Animation duration
+        }
+      });
+      
+      multiplayer.socket?.on('game_ended', ({ winner }) => {
+        if (isMounted.current) {
+          setGameOver(true);
+          setWinner(players[winner]);
+        }
+      });
+      
+      multiplayer.socket?.on('rematch_accepted', ({ gameState }) => {
+        if (isMounted.current) {
+          setStones(gameState.stones);
+          setPlayers(gameState.players);
+          setCurrentPlayerId(gameState.currentPlayer);
+          setGameOver(gameState.gameOver);
+          setWinner(null);
+        }
+      });
+      
+      multiplayer.socket?.on('player_disconnected', () => {
+        if (isMounted.current) {
+          setGameOver(true);
+          alert('Your opponent has disconnected');
+        }
+      });
+      
+      return () => {
+        multiplayer.socket?.off('game_state_updated');
+        multiplayer.socket?.off('game_start');
+        multiplayer.socket?.off('stone_placed');
+        multiplayer.socket?.off('stones_clustered');
+        multiplayer.socket?.off('game_ended');
+        multiplayer.socket?.off('rematch_accepted');
+        multiplayer.socket?.off('player_disconnected');
+      };
+    }
+  }, [isMultiplayer, multiplayer]);
+  
+  // Check for game over (when a player has placed all their stones)
+  useEffect(() => {
+    if (!gameOver && !isAnimating) {
+      // Check if any player has no stones left
+      players.forEach(player => {
+        if (player.stonesLeft <= 0) {
+          setGameOver(true);
+          setWinner(player);
+          
+          if (isMultiplayer && multiplayer && multiplayer.roomId) {
+            multiplayer.notifyGameOver(player.id);
+          }
+        }
+      });
+    }
+  }, [players, gameOver, isAnimating, isMultiplayer, multiplayer]);
+  
+  // Handle stone placement
+  const handleStonePlaced = useCallback((x: number, y: number) => {
+    if (gameOver || isAnimating) return;
+    
+    // Add stone with standardized properties
+    const newStone = standardizeStone({ 
+      x, 
+      y, 
+      playerId: currentPlayerId, 
+      id: Math.floor(Math.random() * 10000) // Use numeric ID
+    });
+    setStones(prev => [...prev, newStone]);
+    
+    // In multiplayer, notify the server
+    if (isMultiplayer && multiplayer && multiplayer.roomId) {
+      multiplayer.placeStone(x, y);
+    } else {
+      // For single player, advance turn after placing stone
+      // In multiplayer, turns will be managed by the server
+      setCurrentPlayerId(prev => (prev + 1) % 2);
+      
+      // Update player stones left
+      setPlayers(prev => prev.map(player => 
+        player.id === currentPlayerId 
+          ? { ...player, stonesLeft: player.stonesLeft - 1 }
+          : player
+      ));
+    }
+  }, [currentPlayerId, gameOver, isAnimating, isMultiplayer, multiplayer]);
+  
+  // Handle reset game
+  const handleResetGame = () => {
+    setStones([]);
+    setPlayers([
+      { id: 0, stonesLeft: 12, name: 'Player 1' },
+      { id: 1, stonesLeft: 12, name: 'Player 2' }
+    ]);
+    setCurrentPlayerId(0);
+    setGameOver(false);
+    setWinner(null);
+    
+    // For multiplayer, request a rematch
+    if (isMultiplayer && multiplayer && multiplayer.roomId) {
+      multiplayer.requestRematch();
+    }
+  };
+  
+  // Determine if it's the player's turn in multiplayer
+  const isMyTurn = !isMultiplayer || 
+    (multiplayer?.playerId !== null && typeof multiplayer?.playerId === 'number' && 
+     currentPlayerId === multiplayer.playerId);
+  
+  return (
+    <div className={`game-container ${isAnimating ? 'animating' : ''}`}>
+      <div className={`game-content ${isMobile ? 'game-content-mobile' : ''}`}>
+        <div className="board-container">
+          <GameBoard
+            stones={stones}
             currentPlayer={currentPlayer}
-            gameOver={false}
-            winner={null}
-            onReset={resetGame}
-            myPlayerId={playerId}
+            onStonePlaced={handleStonePlaced}
+            onClustered={() => {}} // Clustering is now managed by the server
+            placementMode={placementMode}
+            isMyTurn={isMyTurn}
+            animatingStones={animatingStones}
             isMobile={isMobile}
           />
         </div>
-      )}
-      
-      {/* Game over popup */}
-      {gameOver && (
-        <div className="game-over-overlay">
-          <div className={isMobile ? "game-over-popup mobile-popup" : "game-over-popup"}>
-            <h2 className="game-over-title">Game Over!</h2>
-            {winner !== null && (
-              <p className="winner-text">
-                {winner === playerId ? 'You win!' : 'Opponent wins!'}
-              </p>
-            )}
+        
+        <div className={`player-container ${isMobile ? 'player-container-mobile' : ''}`}>
+          <PlayerInfo
+            players={players}
+            currentPlayerId={currentPlayerId}
+            gameOver={gameOver}
+            winner={winner}
+            onReset={handleResetGame}
+            isMultiplayer={isMultiplayer}
+            isMyTurn={isMyTurn}
+            isMobile={isMobile}
+          />
+          
+          <div className="game-controls">
             <button 
-              className="reset-button"
-              onClick={resetGame}
+              className="control-button" 
+              onClick={() => setShowRules(!showRules)}
             >
-              {isInRoom ? 'Request Rematch' : 'Play Again'}
+              {showRules ? 'Hide Rules' : 'Show Rules'}
+            </button>
+            <button 
+              className="control-button" 
+              onClick={() => setPlacementMode(prev => prev === 'flat' ? 'edge' : 'flat')}
+            >
+              Stone Style: {placementMode === 'flat' ? 'Flat' : 'Edge'}
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {showRules && (
+        <div className="rules-popup">
+          <div className="rules-content">
+            <h2>Kluster Game Rules</h2>
+            <ul>
+              <li>Players take turns placing magnetic stones on the board.</li>
+              <li>Each stone has a magnetic field that extends beyond its visible edge.</li>
+              <li>When the magnetic fields of two or more stones overlap significantly, they cluster and are removed from the board.</li>
+              <li>If your stones cluster during your turn, they are removed and counted against your total.</li>
+              <li>The first player to place all their stones without causing a cluster wins!</li>
+            </ul>
+            <button 
+              className="close-button"
+              onClick={() => setShowRules(false)}
+            >
+              Close
             </button>
           </div>
         </div>
@@ -530,4 +291,4 @@ const Game: React.FC = () => {
   );
 };
 
-export default React.memo(Game); 
+export default Game; 

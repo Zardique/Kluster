@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { Stone, Player } from '../types';
+import { stoneIdToString } from '../utils/stoneUtils';
 import './GameBoard3D.css';
 
 interface GameBoardProps {
@@ -59,13 +60,14 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
     const newPositions = new Map(stonePositions);
     
     visibleStones.forEach(stone => {
-      if (!newPositions.has(stone.id)) {
+      const stoneIdStr = stoneIdToString(stone.id);
+      if (!newPositions.has(stoneIdStr)) {
         // Assign a random magnetic strength to each stone (0.8 to 1.2 range)
         // Stones on edge have stronger magnetic properties
         const baseStrength = 0.8 + Math.random() * 0.4;
         const magneticStrength = stone.onEdge ? baseStrength * 1.5 : baseStrength;
         
-        newPositions.set(stone.id, { 
+        newPositions.set(stoneIdStr, { 
           x: stone.x, 
           y: stone.y, 
           vx: 0, 
@@ -77,7 +79,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
     
     // Remove positions for stones that no longer exist
     Array.from(newPositions.keys()).forEach(id => {
-      if (!visibleStones.some(stone => stone.id === id)) {
+      if (!visibleStones.some(stone => stoneIdToString(stone.id) === id)) {
         newPositions.delete(id);
       }
     });
@@ -115,8 +117,8 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
           const posA = newPositions.get(idA)!;
           const posB = newPositions.get(idB)!;
           
-          const stoneA = visibleStones.find(s => s.id === idA);
-          const stoneB = visibleStones.find(s => s.id === idB);
+          const stoneA = visibleStones.find(s => stoneIdToString(s.id) === idA);
+          const stoneB = visibleStones.find(s => stoneIdToString(s.id) === idB);
           
           if (!stoneA || !stoneB) continue;
           
@@ -190,79 +192,66 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
         }
       });
       
-      // Check for clusters
-      const clusteredStoneIds: string[] = [];
-      for (let i = 0; i < stoneIds.length; i++) {
-        for (let j = i + 1; j < stoneIds.length; j++) {
-          const idA = stoneIds[i];
-          const idB = stoneIds[j];
+      // Check for clustering
+      const clusteredIds: string[] = [];
+      for (let i = 0; i < visibleStones.length; i++) {
+        for (let j = i + 1; j < visibleStones.length; j++) {
+          const stoneA = visibleStones[i];
+          const stoneB = visibleStones[j];
           
-          const posA = newPositions.get(idA)!;
-          const posB = newPositions.get(idB)!;
+          // Only check for clustering between stones of the same player
+          if (stoneA.playerId !== stoneB.playerId) continue;
           
-          const stoneA = visibleStones.find(s => s.id === idA);
-          const stoneB = visibleStones.find(s => s.id === idB);
+          const posA = newPositions.get(stoneIdToString(stoneA.id));
+          const posB = newPositions.get(stoneIdToString(stoneB.id));
           
-          if (!stoneA || !stoneB) continue;
+          if (!posA || !posB) continue;
           
-          const dx = posB.x - posA.x;
-          const dy = posB.y - posA.y;
+          const dx = posA.x - posB.x;
+          const dy = posA.y - posB.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
-          // Adjust cluster threshold based on whether stones are on edge
-          const adjustedThreshold = CLUSTER_THRESHOLD * 
-            ((stoneA.onEdge && stoneB.onEdge) ? 1.2 : 
-             (stoneA.onEdge || stoneB.onEdge) ? 1.1 : 1);
-          
-          // If stones are close enough, they are clustered
-          if (distance < adjustedThreshold) {
-            if (!clusteredStoneIds.includes(idA)) {
-              clusteredStoneIds.push(idA);
-            }
-            if (!clusteredStoneIds.includes(idB)) {
-              clusteredStoneIds.push(idB);
-            }
+          if (distance < CLUSTER_THRESHOLD) {
+            const idA = stoneIdToString(stoneA.id);
+            const idB = stoneIdToString(stoneB.id);
+            
+            if (!clusteredIds.includes(idA)) clusteredIds.push(idA);
+            if (!clusteredIds.includes(idB)) clusteredIds.push(idB);
           }
         }
       }
       
-      // If we found clustered stones, notify the game
-      if (clusteredStoneIds.length > 0 && animatingStones.length === 0) {
-        // Animate the clustered stones
-        setAnimatingStones(clusteredStoneIds);
+      if (clusteredIds.length >= 2 && !animatingStones.length) {
+        setAnimatingStones(clusteredIds);
         
-        // Clear animation after a delay
+        // Wait for animation then notify about the cluster
         setTimeout(() => {
+          onCluster(clusteredIds);
           setAnimatingStones([]);
-          // Notify the game about the clustered stones
-          onCluster(clusteredStoneIds);
         }, CLUSTER_ANIMATION_DURATION);
       }
       
-      // Update stone positions in the UI
+      // Update stones in game state if positions have changed significantly
       if (hasUpdates) {
-        setStonePositions(newPositions);
-        
-        // Update the actual stone positions in the game state
-        const updates = stoneIds.map(id => {
-          const pos = newPositions.get(id)!;
-          return { id, x: pos.x, y: pos.y };
-        });
+        const updates = Array.from(newPositions.entries())
+          .map(([id, pos]) => ({ id, x: pos.x, y: pos.y }));
         
         updateStonePositions(updates);
       }
       
+      setStonePositions(newPositions);
       animationRef.current = requestAnimationFrame(animate);
     };
     
     animationRef.current = requestAnimationFrame(animate);
     
+    // Cleanup animation
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [visibleStones, stonePositions, gameOver, playAreaRadius, onCluster, updateStonePositions, animatingStones]);
+  }, [visibleStones, stonePositions, playAreaRadius, gameOver, onCluster, updateStonePositions]);
   
   // Handle mouse events for stone placement
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -391,7 +380,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
   
   // Get the actual positions to render
   const getRenderPosition = (stone: Stone) => {
-    const pos = stonePositions.get(stone.id);
+    const pos = stonePositions.get(stoneIdToString(stone.id));
     return pos ? { x: pos.x, y: pos.y } : { x: stone.x, y: stone.y };
   };
   
@@ -459,9 +448,10 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
         
         {/* Stones */}
         {visibleStones.map(stone => {
-          const pos = getRenderPosition(stone);
-          const magneticStrength = getMagneticStrength(stone.id);
-          const isAnimating = animatingStones.includes(stone.id);
+          const stoneIdStr = stoneIdToString(stone.id);
+          const isAnimating = animatingStones.includes(stoneIdStr);
+          const pos = stonePositions.get(stoneIdStr) || { x: stone.x, y: stone.y, vx: 0, vy: 0, magneticStrength: 1 };
+          const stoneColor = stone.playerId === 0 ? '#3498db' : '#e74c3c';
           
           // Convert 2D position to 3D
           const position = [
@@ -470,15 +460,13 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
             pos.y - playAreaRadius // Center the board
           ];
           
-          // Determine stone color based on player
-          const color = stone.player.id === 0 ? new THREE.Color(0x3498db) : new THREE.Color(0xe74c3c);
-          
           // Add glow effect for magnetic strength
+          const magneticStrength = getMagneticStrength(stoneIdStr);
           const glowIntensity = magneticStrength * 0.5;
-          const emissiveColor = stone.player.id === 0 ? new THREE.Color(0x3498db).multiplyScalar(glowIntensity) : new THREE.Color(0xe74c3c).multiplyScalar(glowIntensity);
+          const emissiveColor = new THREE.Color(stoneColor).multiplyScalar(glowIntensity);
           
           return (
-            <group key={stone.id}>
+            <group key={stoneIdStr}>
               <mesh 
                 position={position as any}
                 rotation={stone.onEdge ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
@@ -486,7 +474,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
               >
                 <cylinderGeometry args={[STONE_RADIUS, STONE_RADIUS, STONE_HEIGHT, STONE_SEGMENTS]} />
                 <meshStandardMaterial 
-                  color={color}
+                  color={stoneColor}
                   roughness={0.5}
                   metalness={0.2}
                   transparent={isAnimating}
@@ -503,7 +491,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
               >
                 <sphereGeometry args={[STONE_RADIUS * 1.1, 16, 16]} />
                 <meshBasicMaterial 
-                  color={stone.player.id === 0 ? 0x3498db : 0xe74c3c} 
+                  color={stoneColor} 
                   transparent={true} 
                   opacity={0.1} 
                   side={THREE.BackSide}
