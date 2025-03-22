@@ -163,7 +163,9 @@ const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
           setWinner(player);
           
           if (isMultiplayer && multiplayer && multiplayer.roomId) {
-            multiplayer.notifyGameOver(player.id);
+            // Ensure we're passing a number, not a Player object
+            const winnerPlayerId: number = player.id;
+            multiplayer.notifyGameOver(winnerPlayerId);
           }
         }
       });
