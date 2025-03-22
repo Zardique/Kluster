@@ -8,7 +8,8 @@ interface PlayerInfoProps {
   gameOver: boolean;
   winner: number | null;
   onReset: () => void;
-  myPlayerId?: number | null; // Optional prop to identify the current player in multiplayer mode
+  myPlayerId: number | null;
+  isMobile?: boolean;
 }
 
 const PlayerInfo: React.FC<PlayerInfoProps> = ({
@@ -17,7 +18,8 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
   gameOver,
   winner,
   onReset,
-  myPlayerId = null // Default to null for single-player mode
+  myPlayerId = null, // Default to null for single-player mode
+  isMobile = false
 }) => {
   const [animatingPlayer, setAnimatingPlayer] = useState<number | null>(null);
   const [prevStonesLeft, setPrevStonesLeft] = useState<Record<number, number>>({});
@@ -45,15 +47,40 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
     });
   }, [players, prevStonesLeft]);
   
+  const cardClass = (player: Player, index: number) => {
+    const isCurrentPlayer = index === currentPlayer;
+    const isPlayerTurn = `player-card ${isCurrentPlayer ? 'active' : ''}`;
+    const isThisPlayer = myPlayerId !== null && index === myPlayerId ? ' you' : '';
+    const isAnimating = animatingPlayer === index ? ' receiving' : '';
+    
+    return `${isPlayerTurn}${isThisPlayer}${isAnimating}`;
+  };
+  
+  // Adjust content based on device
+  const rulesList = isMobile ? (
+    <ul>
+      <li>Place magnets on the board.</li>
+      <li>Clustered magnets go to the opposite player.</li>
+      <li>First to place all magnets wins!</li>
+    </ul>
+  ) : (
+    <ul>
+      <li>Players take turns placing magnets on the game board.</li>
+      <li>Magnets naturally attract each other when placed nearby.</li>
+      <li>When magnets cluster together, they go to the opponent's pile.</li>
+      <li>First player to place all their magnets on the board wins!</li>
+    </ul>
+  );
+  
   return (
     <div className="side-panel">
       <h2 className="game-title">Kluster</h2>
       
       <div className="player-cards">
-        {players.map(player => (
+        {players.map((player, index) => (
           <div 
             key={player.id} 
-            className={`player-card player-${player.id + 1} ${player.id === currentPlayer && !gameOver ? 'active' : ''} ${player.id === myPlayerId ? 'my-player' : ''}`}
+            className={cardClass(player, index)}
           >
             <h3 className="player-name">
               {player.id === myPlayerId ? 'You' : 'Opponent'}
@@ -87,11 +114,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
       
       <div className="game-rules">
         <h3 className="rules-title">Game Rules</h3>
-        <ul className="rules-list">
-          <li>Stones have magnetic properties and will cluster when close enough.</li>
-          <li>If stones cluster during your turn, you must collect them all.</li>
-          <li>The first player to place all their stones without causing a cluster wins.</li>
-        </ul>
+        {rulesList}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { PerspectiveCamera, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,6 +14,7 @@ interface GameBoardProps {
   currentPlayer: Player;
   gameOver: boolean;
   placementMode: 'flat' | 'edge';
+  isMobile?: boolean;
 }
 
 // Constants for magnetic simulation
@@ -39,7 +40,8 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
   updateStonePositions,
   currentPlayer,
   gameOver,
-  placementMode
+  placementMode,
+  isMobile = false
 }) => {
   const boardRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -337,6 +339,22 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
     return pos ? pos.magneticStrength : 1;
   };
   
+  // Adjust the camera position based on device type
+  const cameraPosition = useMemo(() => 
+    isMobile 
+      ? [0, 100, 350] as [number, number, number] // Closer camera for mobile
+      : [0, 150, 400] as [number, number, number], // Default camera position
+    [isMobile]
+  );
+  
+  // Adjust controls sensitivity for mobile
+  const controlsConfig = useMemo(() => ({
+    enableZoom: !isMobile, // Disable zoom on mobile to prevent gesture conflicts
+    enablePan: !isMobile, // Disable panning on mobile
+    rotateSpeed: isMobile ? 0.5 : 1, // Lower rotate speed on mobile
+    dampingFactor: isMobile ? 0.15 : 0.1, // Higher damping on mobile for smoother experience
+  }), [isMobile]);
+  
   // Scene component to avoid TypeScript errors
   const Scene = () => {
     return (
@@ -482,7 +500,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
         {/* Static isometric camera */}
         <PerspectiveCamera 
           makeDefault 
-          position={[250, 250, 250]} 
+          position={cameraPosition} 
           fov={45} 
           near={1}
           far={2000}

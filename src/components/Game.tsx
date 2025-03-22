@@ -4,6 +4,7 @@ import PlayerInfo from './PlayerInfo';
 import Lobby from './Lobby';
 import { Stone, Player } from '../types';
 import { useMultiplayer } from '../context/MultiplayerContext';
+import useDeviceDetect from '../hooks/useDeviceDetect';
 import './ModernUI.css';
 
 // Game constants
@@ -42,6 +43,9 @@ const GAME_SOUNDS = {
 const isDevelopment = import.meta.env.DEV;
 
 const Game: React.FC = () => {
+  // Device detection for responsive design
+  const { isMobile } = useDeviceDetect();
+  
   // Game state - grouped related state
   const [stones, setStones] = useState<Stone[]>([]);
   const [players, setPlayers] = useState<Player[]>([
@@ -439,6 +443,12 @@ const Game: React.FC = () => {
     [playerId, currentPlayer]
   );
   
+  // Adjust game content layout based on device
+  const gameContentClass = useMemo(() => 
+    isMobile ? "game-content game-content-mobile" : "game-content", 
+    [isMobile]
+  );
+  
   return (
     <div className="modern-container">
       {/* Animated background elements */}
@@ -453,8 +463,8 @@ const Game: React.FC = () => {
       
       {/* Only show game content when not in lobby or game has started */}
       {(!showLobby || isGameStarted) && (
-        <div className="game-content">
-          {/* Game board on the left */}
+        <div className={gameContentClass}>
+          {/* Game board on the left (or top on mobile) */}
           <div className="board-wrapper">
             <div 
               className="board-glow" 
@@ -466,17 +476,18 @@ const Game: React.FC = () => {
             ></div>
             <GameBoard3D
               stones={stones}
-              playAreaRadius={PLAY_AREA_RADIUS}
+              playAreaRadius={isMobile ? PLAY_AREA_RADIUS * 0.8 : PLAY_AREA_RADIUS}
               onStonePlace={handleStonePlace}
               onCluster={handleCluster}
               updateStonePositions={updateStonePositions}
               currentPlayer={players[currentPlayer]}
               gameOver={gameOver}
               placementMode="flat"
+              isMobile={isMobile}
             />
           </div>
           
-          {/* Controls and info on the right */}
+          {/* Controls and info on the right (or bottom on mobile) */}
           <PlayerInfo
             players={players}
             currentPlayer={currentPlayer}
@@ -484,6 +495,7 @@ const Game: React.FC = () => {
             winner={null}
             onReset={resetGame}
             myPlayerId={playerId}
+            isMobile={isMobile}
           />
         </div>
       )}
@@ -491,7 +503,7 @@ const Game: React.FC = () => {
       {/* Game over popup overlay */}
       {gameOver && (
         <div className="game-over-overlay">
-          <div className="game-over-popup">
+          <div className={isMobile ? "game-over-popup mobile-popup" : "game-over-popup"}>
             <h2 className="game-over-title">Game Over!</h2>
             {winner !== null && (
               <p className="winner-text">
