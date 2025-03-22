@@ -39,67 +39,143 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
   // Track stones that are being clustered for animation
   const [clusteringStones, setClusteringStones] = useState<string[]>([]);
   
+  // Calculate and track potential clustering lines for debugging
+  const [debugLines, setDebugLines] = useState<{from: Stone, to: Stone, distance: number}[]>([]);
+  
   // Check for clustering based on distance
   const checkClustering = useCallback(() => {
     if (gameOver) return;
     
-    // Reference to store pairs of potentially clustering stones
-    const potentialClusters: Map<string, Set<string>> = new Map();
-    const clusteringThreshold = STONE_RADIUS * 1.8; // Slightly less than diameter for more accurate detection
+    console.log("Checking for clustering...");
+    console.log("Current stones:", visibleStones);
     
-    // Check each pair of stones
-    for (let i = 0; i < visibleStones.length; i++) {
-      const stone1 = visibleStones[i];
+    // Group stones by player
+    const stonesByPlayer = new Map<number, Stone[]>();
+    
+    visibleStones.forEach(stone => {
+      const playerId = stone.player.id;
+      if (!stonesByPlayer.has(playerId)) {
+        stonesByPlayer.set(playerId, []);
+      }
+      stonesByPlayer.get(playerId)?.push(stone);
+    });
+    
+    // Process clusters for each player
+    stonesByPlayer.forEach((playerStones, playerId) => {
+      // Skip if player has fewer than 2 stones
+      if (playerStones.length < 2) return;
       
-      for (let j = i + 1; j < visibleStones.length; j++) {
-        const stone2 = visibleStones[j];
+      // Find clusters through connected components
+      const visited = new Set<string>();
+      const clusters: string[][] = [];
+      
+      for (const stone of playerStones) {
+        if (visited.has(stone.id)) continue;
         
-        // Only check clustering for stones of the same player
-        if (stone1.player.id !== stone2.player.id) continue;
+        // Start a new cluster
+        const cluster: string[] = [];
+        const queue: Stone[] = [stone];
+        visited.add(stone.id);
+        cluster.push(stone.id);
         
-        // Calculate distance between stones
-        const dx = stone1.x - stone2.x;
-        const dy = stone1.y - stone2.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // If stones are close enough to cluster
-        if (distance < clusteringThreshold) {
-          console.log(`Stones ${stone1.id} and ${stone2.id} are clustering. Distance: ${distance}`);
+        // BFS to find all connected stones
+        while (queue.length > 0) {
+          const currentStone = queue.shift()!;
           
-          // Add to potential clusters map
-          const playerId = stone1.player.id.toString();
-          if (!potentialClusters.has(playerId)) {
-            potentialClusters.set(playerId, new Set());
+          // Check all other stones of this player for proximity
+          for (const otherStone of playerStones) {
+            if (visited.has(otherStone.id)) continue;
+            
+            const dx = currentStone.x - otherStone.x;
+            const dy = currentStone.y - otherStone.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // If stones are close enough to cluster
+            if (distance < CLUSTER_THRESHOLD) {
+              visited.add(otherStone.id);
+              cluster.push(otherStone.id);
+              queue.push(otherStone);
+              console.log(`Stone ${currentStone.id} and ${otherStone.id} are clustering. Distance: ${distance}`);
+            }
           }
-          
-          potentialClusters.get(playerId)?.add(stone1.id);
-          potentialClusters.get(playerId)?.add(stone2.id);
+        }
+        
+        // Only consider clusters of 2 or more stones
+        if (cluster.length >= 2) {
+          clusters.push(cluster);
         }
       }
-    }
-    
-    // Process potential clusters
-    potentialClusters.forEach((stoneIds, playerId) => {
-      if (stoneIds.size >= 2) {
-        // Convert Set to Array for the callback
-        const clusteringStoneIds = Array.from(stoneIds);
-        console.log(`Notifying clustering for player ${playerId}, stones:`, clusteringStoneIds);
+      
+      // Notify about clusters
+      clusters.forEach(cluster => {
+        console.log(`Found cluster for player ${playerId}:`, cluster);
         
         // Set clustering animation state
-        setClusteringStones(clusteringStoneIds);
+        setClusteringStones(cluster);
         
         // Notify clustering after a short delay to show the animation
         setTimeout(() => {
-          onCluster(clusteringStoneIds);
-          // Reset clustering animation state
+          onCluster(cluster);
+          // Reset clustering animation state after notification
           setClusteringStones([]);
         }, 600);
-      }
+      });
     });
     
   }, [visibleStones, gameOver, onCluster]);
 
-  // Check for clustering after stones are placed or moved
+  // Debug function to visualize clustering connections
+  const updateDebugVisuals = useCallback(() => {
+    if (gameOver) {
+      setDebugLines([]);
+      return;
+    }
+    
+    const newLines: {from: Stone, to: Stone, distance: number}[] = [];
+    
+    // Group stones by player
+    const stonesByPlayer = new Map<number, Stone[]>();
+    
+    visibleStones.forEach(stone => {
+      const playerId = stone.player.id;
+      if (!stonesByPlayer.has(playerId)) {
+        stonesByPlayer.set(playerId, []);
+      }
+      stonesByPlayer.get(playerId)?.push(stone);
+    });
+    
+    // Check each pair of stones per player
+    stonesByPlayer.forEach((playerStones) => {
+      for (let i = 0; i < playerStones.length; i++) {
+        for (let j = i + 1; j < playerStones.length; j++) {
+          const stone1 = playerStones[i];
+          const stone2 = playerStones[j];
+          
+          const dx = stone1.x - stone2.x;
+          const dy = stone1.y - stone2.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // If close enough to potentially cluster
+          if (distance < CLUSTER_THRESHOLD * 1.5) {
+            newLines.push({
+              from: stone1,
+              to: stone2,
+              distance
+            });
+          }
+        }
+      }
+    });
+    
+    setDebugLines(newLines);
+  }, [visibleStones, gameOver]);
+  
+  // Update debug visuals when stones change
+  useEffect(() => {
+    updateDebugVisuals();
+  }, [visibleStones, updateDebugVisuals]);
+
+  // Reduce clustering check frequency
   useEffect(() => {
     // Use a slight delay to allow rendering to complete
     const timeoutId = setTimeout(() => {
@@ -142,6 +218,52 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     }
   };
   
+  // Handle mouse up / touch end for stone placement
+  const finalizeStonePlacement = useCallback((x: number, y: number) => {
+    if (gameOver) return;
+    
+    // Check if the position is within the play area
+    const centerX = playAreaRadius;
+    const centerY = playAreaRadius;
+    const distanceFromCenter = Math.sqrt(
+      Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
+    );
+    
+    // Convert to game coordinates
+    const gameX = x - centerX;
+    const gameY = y - centerY;
+    
+    // Only allow placement within play area minus stone radius
+    if (distanceFromCenter <= playAreaRadius - STONE_RADIUS) {
+      // Check collision with other stones
+      let canPlace = true;
+      
+      for (const stone of visibleStones) {
+        const dx = stone.x - gameX;
+        const dy = stone.y - gameY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If too close to another stone, can't place here
+        // Using strict threshold to ensure stones don't visually overlap
+        if (distance < STONE_RADIUS * 2) {
+          console.log(`Stone placement blocked by ${stone.id} at distance ${distance}`);
+          canPlace = false;
+          break;
+        }
+      }
+      
+      if (canPlace) {
+        console.log(`Placing stone at game coordinates: (${gameX}, ${gameY})`);
+        onStonePlace(gameX, gameY);
+      } else {
+        console.log('Cannot place stone: collision detected');
+      }
+    } else {
+      console.log('Cannot place stone: outside play area');
+    }
+  }, [gameOver, playAreaRadius, visibleStones, onStonePlace]);
+  
+  // Handle mouse up event
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDragging || gameOver) return;
     
@@ -152,36 +274,7 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    // Check if the position is within the play area
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
-    );
-    
-    if (distanceFromCenter <= playAreaRadius - STONE_RADIUS) {
-      // Convert to game coordinates
-      const gameX = x - centerX;
-      const gameY = y - centerY;
-      
-      // Check collision with other stones
-      let canPlace = true;
-      for (const stone of visibleStones) {
-        const dx = stone.x - gameX;
-        const dy = stone.y - gameY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance < STONE_RADIUS * 1.8) {
-          canPlace = false;
-          break;
-        }
-      }
-      
-      if (canPlace) {
-        // Place the stone at this position
-        onStonePlace(gameX, gameY);
-      }
-    }
+    finalizeStonePlacement(x, y);
     
     // Reset dragging state
     setIsDragging(false);
@@ -233,45 +326,14 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     setMousePosition({ x, y });
   };
   
+  // Handle touch end event
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging || gameOver) return;
     
-    // Get the position relative to the board
-    const rect = boardRef.current?.getBoundingClientRect();
-    if (!rect || !dragPosition) return;
+    // Get the last drag position if available
+    if (!dragPosition) return;
     
-    const { x, y } = dragPosition;
-    
-    // Check if the position is within the play area
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
-    );
-    
-    if (distanceFromCenter <= playAreaRadius - STONE_RADIUS) {
-      // Convert to game coordinates
-      const gameX = x - centerX;
-      const gameY = y - centerY;
-      
-      // Check collision with other stones
-      let canPlace = true;
-      for (const stone of visibleStones) {
-        const dx = stone.x - gameX;
-        const dy = stone.y - gameY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance < STONE_RADIUS * 1.8) {
-          canPlace = false;
-          break;
-        }
-      }
-      
-      if (canPlace) {
-        // Place the stone at this position
-        onStonePlace(gameX, gameY);
-      }
-    }
+    finalizeStonePlacement(dragPosition.x, dragPosition.y);
     
     // Reset states
     setIsDragging(false);
@@ -337,6 +399,21 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
       
       {/* Board boundary circle */}
       <div className="board-boundary"></div>
+      
+      {/* Debug lines showing potential clusters */}
+      {debugLines.map((line, index) => (
+        <div 
+          key={`debug-line-${index}`}
+          className={`debug-line ${line.distance < CLUSTER_THRESHOLD ? 'will-cluster' : 'near-cluster'}`}
+          style={{
+            left: `${playAreaRadius + line.from.x}px`,
+            top: `${playAreaRadius + line.from.y}px`,
+            width: `${line.distance}px`,
+            transform: `rotate(${Math.atan2(line.to.y - line.from.y, line.to.x - line.from.x)}rad)`,
+            transformOrigin: '0 0'
+          }}
+        />
+      ))}
       
       {/* Visible stones */}
       {visibleStones.map(stone => (

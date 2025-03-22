@@ -187,9 +187,17 @@ const Game: React.FC = () => {
   
   // Handle stone placement
   const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
+    console.log(`Placing stone at (${x}, ${y}), fromServer: ${fromServer}`);
+    
     // If it's not our turn and not from the server, don't allow placement
     if (!fromServer && playerId !== null && currentPlayer !== playerId) {
       console.log("Not your turn", playerId, currentPlayer);
+      return;
+    }
+    
+    // Prevent placing stones if player has none left
+    if (players[currentPlayer].stonesLeft <= 0) {
+      console.log("No stones left for player", currentPlayer);
       return;
     }
     
@@ -202,7 +210,7 @@ const Game: React.FC = () => {
       height: STONE_HEIGHT,
       player: players[currentPlayer],
       clustered: false,
-      onEdge: false // Simplified for the TAG version
+      onEdge: false
     };
     
     // Add stone to the board
@@ -229,9 +237,12 @@ const Game: React.FC = () => {
       return newPlayers;
     });
     
-    // Check for game over
-    if (players[currentPlayer].stonesLeft <= 1) {
+    // Determine if the game is over and handle accordingly
+    const willBeOutOfStones = players[currentPlayer].stonesLeft <= 1;
+    
+    if (willBeOutOfStones) {
       setTimeout(() => {
+        // Indicate the game is over with the current player as winner
         setGameOver(true);
         setWinner(currentPlayer);
         
@@ -239,6 +250,7 @@ const Game: React.FC = () => {
           playSound(GAME_SOUNDS.gameOver);
         }
         
+        // Notify in multiplayer mode
         if (playerId !== null && isInRoom) {
           notifyGameOver(currentPlayer);
         }
@@ -248,27 +260,29 @@ const Game: React.FC = () => {
       const nextPlayer = (currentPlayer + 1) % players.length;
       setCurrentPlayer(nextPlayer);
       
-      // Update multiplayer state
+      // Update multiplayer state if this is a local move
       if (!fromServer && playerId !== null && isInRoom) {
-        // Send stone placement event
+        // Send stone placement event first to ensure immediate feedback
         emitPlaceStone(x, y);
         
-        // Update game state
+        // Then update full game state after a slight delay to ensure consistency
         setTimeout(() => {
+          const updatedPlayers = players.map((player, idx) => {
+            if (idx === currentPlayer) {
+              return {
+                ...player,
+                stonesLeft: player.stonesLeft - 1
+              };
+            }
+            return player;
+          });
+          
           const gameState = {
             stones: [...stones, newStone],
-            players: players.map((player, idx) => {
-              if (idx === currentPlayer) {
-                return {
-                  ...player,
-                  stonesLeft: player.stonesLeft - 1
-                };
-              }
-              return player;
-            }),
+            players: updatedPlayers,
             currentPlayer: nextPlayer,
-            gameOver: players[currentPlayer].stonesLeft <= 1,
-            winner: players[currentPlayer].stonesLeft <= 1 ? currentPlayer : null
+            gameOver: willBeOutOfStones,
+            winner: willBeOutOfStones ? currentPlayer : null
           };
           
           updateGameState(gameState);
@@ -276,7 +290,7 @@ const Game: React.FC = () => {
       }
     }
   }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, 
-      updateGameState, notifyGameOver, playSound]);
+      updateGameState, notifyGameOver, playSound, soundsLoaded]);
   
   // Add a function to check game over conditions
   const checkGameOverConditions = useCallback(() => {
@@ -302,11 +316,20 @@ const Game: React.FC = () => {
     
     console.log('Handling cluster for stones:', clusteredStoneIds);
     
+    // Prevent duplicate processing by using a ref
+    if (processingClusterRef.current) {
+      console.log('Already processing a cluster, skipping...');
+      return;
+    }
+    
+    processingClusterRef.current = true;
+    
     // Find the clustered stones by their ids
     const clusteredStones = stones.filter(stone => clusteredStoneIds.includes(stone.id));
     
     if (clusteredStones.length < 2) {
       console.warn('Not enough stones found for clustering');
+      processingClusterRef.current = false;
       return;
     }
     
@@ -317,6 +340,7 @@ const Game: React.FC = () => {
     const samePlayer = clusteredStones.every(stone => stone.player.id === stonePlayer.id);
     if (!samePlayer) {
       console.warn('Clustering stones belong to different players');
+      processingClusterRef.current = false;
       return;
     }
     
@@ -333,54 +357,58 @@ const Game: React.FC = () => {
       height: STONE_HEIGHT,
       player: stonePlayer,
       clustered: false,
-      onEdge: false // Simplified for this version
+      onEdge: false
     };
+    
+    console.log('Created new stone at center:', newStone);
     
     // Remove the clustered stones and add the new one
     setStones(prevStones => {
       const remainingStones = prevStones.filter(stone => !clusteredStoneIds.includes(stone.id));
+      
       // Play cluster sound effect
-      playSound(GAME_SOUNDS.placeStone);
+      if (soundsLoaded.current) {
+        playSound(GAME_SOUNDS.placeStone);
+      }
       
       // Notify the multiplayer context if available
-      if (notifyCluster) {
-        // Check the expected parameter type for notifyCluster and adjust accordingly
-        if (typeof notifyCluster === 'function') {
-          notifyCluster(clusteredStones);
-        }
+      if (notifyCluster && typeof notifyCluster === 'function' && playerId !== null && isInRoom) {
+        notifyCluster(clusteredStones);
       }
       
       return [...remainingStones, newStone];
     });
     
-    // Check if player has score property before updating
-    const playerHasScoreProperty = players.length > 0 && 'score' in players[0];
+    // Update player's stones left - the player gets back stones
+    setPlayers(prevPlayers => 
+      prevPlayers.map(player => 
+        player.id === stonePlayer.id
+          ? { ...player, stonesLeft: player.stonesLeft + (clusteredStones.length - 1) }
+          : player
+      )
+    );
     
-    if (playerHasScoreProperty) {
-      // Calculate points for the clustering
-      const pointsEarned = clusteredStones.length * POINTS_PER_CLUSTER;
+    // Reset processing flag after a delay
+    setTimeout(() => {
+      processingClusterRef.current = false;
       
-      // Update player score
-      setPlayers(prevPlayers => 
-        prevPlayers.map(player => 
-          player.id === stonePlayer.id
-            ? { ...player, score: (player as any).score + pointsEarned }
-            : player
-        )
-      );
-      
-      // Check for game over conditions based on score
-      const updatedPlayerScore = (players.find(p => p.id === stonePlayer.id) as any)?.score ?? 0;
-      if (updatedPlayerScore + pointsEarned >= POINTS_TO_WIN) {
+      // Check for game-ending conditions
+      const playerStones = players.find(p => p.id === stonePlayer.id)?.stonesLeft ?? 0;
+      if (playerStones + (clusteredStones.length - 1) >= INITIAL_STONES_PER_PLAYER) {
         setGameOver(true);
         setWinner(stonePlayer.id);
+        
+        if (soundsLoaded.current) {
+          playSound(GAME_SOUNDS.gameOver);
+        }
+        
+        if (playerId !== null && isInRoom) {
+          notifyGameOver(stonePlayer.id);
+        }
       }
-    } else {
-      // Handle game over based on remaining stones or other logic
-      // This is the fallback for Player types without a score property
-      checkGameOverConditions();
-    }
-  }, [stones, players, setStones, setPlayers, notifyCluster, playSound, checkGameOverConditions]);
+    }, 700);
+    
+  }, [stones, players, playerId, isInRoom, notifyCluster, notifyGameOver, playSound, soundsLoaded]);
   
   // Reset game state
   const resetGame = useCallback(() => {
