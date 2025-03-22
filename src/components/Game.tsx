@@ -65,7 +65,16 @@ const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
           setGameOver(gameState.gameOver);
           
           if (gameState.winner !== null) {
-            setWinner(gameState.players[gameState.winner]);
+            // Make sure we handle the winner properly - it could be an index or a Player object
+            if (typeof gameState.winner === 'number') {
+              // It's a player index/ID
+              const winnerPlayer = gameState.players.find(p => p.id === gameState.winner) || 
+                                   gameState.players[gameState.winner];
+              setWinner(winnerPlayer);
+            } else {
+              // It's already a Player object
+              setWinner(gameState.winner);
+            }
           }
         }
       });
@@ -120,7 +129,15 @@ const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
       multiplayer.socket?.on('game_ended', ({ winner }) => {
         if (isMounted.current) {
           setGameOver(true);
-          setWinner(players[winner]);
+          
+          // Handle the winner which could be a player ID (number)
+          if (typeof winner === 'number') {
+            const winnerPlayer = players.find(p => p.id === winner) || players[winner];
+            setWinner(winnerPlayer);
+          } else if (winner && typeof winner === 'object') {
+            // It's already a Player object
+            setWinner(winner);
+          }
         }
       });
       
@@ -151,7 +168,7 @@ const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
         multiplayer.socket?.off('player_disconnected');
       };
     }
-  }, [isMultiplayer, multiplayer]);
+  }, [isMultiplayer, multiplayer, players]);
   
   // Check for game over (when a player has placed all their stones)
   useEffect(() => {
@@ -163,9 +180,8 @@ const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
           setWinner(player);
           
           if (isMultiplayer && multiplayer && multiplayer.roomId) {
-            // Ensure we're passing a number, not a Player object
-            const winnerPlayerId: number = player.id;
-            multiplayer.notifyGameOver(winnerPlayerId);
+            // Always send just the player ID, not the whole Player object
+            multiplayer.notifyGameOver(player.id);
           }
         }
       });
