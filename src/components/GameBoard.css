@@ -12,15 +12,21 @@
   perspective: 1200px;
   will-change: transform;
   margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .play-area {
   position: absolute;
+  width: 500px;
+  height: 500px;
   background-color: rgba(255, 255, 255, 0.03);
   border-radius: 50%;
   border: 1px dashed rgba(255, 255, 255, 0.2);
-  top: 0;
-  left: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 
@@ -34,6 +40,8 @@
   pointer-events: none;
   will-change: transform;
   backface-visibility: hidden;
+  top: 50%;
+  left: 50%;
 }
 
 .stone.player-1 {
@@ -77,6 +85,8 @@
   opacity: 0.6;
   pointer-events: none;
   animation: pulse 1s infinite alternate;
+  top: 50%;
+  left: 50%;
 }
 
 .magnetic-field {

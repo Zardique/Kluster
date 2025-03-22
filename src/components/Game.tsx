@@ -206,7 +206,7 @@ const Game: React.FC = () => {
       return;
     }
     
-    // Create a new stone with unique ID - positions are now in gameboard absolute coordinates
+    // Create a new stone with unique ID - positions are now relative to center of board
     const newStone: Stone = {
       id: `stone_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       x,

@@ -67,10 +67,9 @@ const StoneComponent: React.FC<{
     isNearCluster ? 'pre-cluster' : ''
   }`;
 
-  // Simple absolute positioning using pixel coordinates
+  // Stones are positioned with offsets from center
   const stoneStyle: React.CSSProperties = {
-    left: `${stone.x}px`,
-    top: `${stone.y}px`,
+    transform: `translate(${stone.x}px, ${stone.y}px) translate(-50%, -50%)`,
     width: `${STONE_RADIUS * 2}px`,
     height: `${STONE_RADIUS * 2}px`
   };
@@ -436,22 +435,19 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     
     const rect = boardRef.current.getBoundingClientRect();
     
-    // Get coordinates relative to the center of the board
+    // Center of the board
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     
-    // Calculate position relative to center
-    const boardX = clientX - centerX + PLAY_AREA_RADIUS;
-    const boardY = clientY - centerY + PLAY_AREA_RADIUS;
+    // Calculate coordinates relative to center
+    const x = clientX - centerX;
+    const y = clientY - centerY;
     
     // Check if within play area
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(clientX - centerX, 2) + 
-      Math.pow(clientY - centerY, 2)
-    );
+    const distanceFromCenter = Math.sqrt(x * x + y * y);
     
     if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
-      return { x: boardX, y: boardY };
+      return { x, y };
     }
     
     return null;
@@ -594,8 +590,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div
         className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
         style={{
-          left: `${draggingStone.x}px`,
-          top: `${draggingStone.y}px`,
+          transform: `translate(${draggingStone.x}px, ${draggingStone.y}px) translate(-50%, -50%)`,
           width: `${STONE_RADIUS * 2}px`,
           height: `${STONE_RADIUS * 2}px`
         }}
@@ -611,8 +606,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div 
         className="placement-indicator" 
         style={{
-          left: `${indicatorPos.x}px`,
-          top: `${indicatorPos.y}px`,
+          transform: `translate(${indicatorPos.x}px, ${indicatorPos.y}px) translate(-50%, -50%)`,
           width: `${STONE_RADIUS * 2}px`,
           height: `${STONE_RADIUS * 2}px`,
           borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
@@ -621,13 +615,10 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     );
   }, [showPlacementIndicator, indicatorPos, currentPlayer.id]);
 
-  // Position the play area properly in the center of the board
+  // Simple play area style
   const playAreaStyle = useMemo(() => ({
     width: `${PLAY_AREA_RADIUS * 2}px`,
-    height: `${PLAY_AREA_RADIUS * 2}px`,
-    position: 'absolute' as const,
-    top: 0,
-    left: 0
+    height: `${PLAY_AREA_RADIUS * 2}px`
   }), []);
 
   // Optimize magnetic field lines rendering
