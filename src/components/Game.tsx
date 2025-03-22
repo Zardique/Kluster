@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import GameBoard from './GameBoard';
+import GameBoard3D from './GameBoard3D';
 import PlayerInfo from './PlayerInfo';
 import Lobby from './Lobby';
 import { Stone, Player } from '../types';
@@ -150,7 +150,8 @@ const Game: React.FC = () => {
       // Only process if we're not already processing a cluster
       // and if the event wasn't triggered by us
       if (!processingClusterRef.current) {
-        handleCluster(data.clusteredStones, true);
+        const clusterIds = data.clusteredStones.map(stone => stone.id);
+        handleCluster(clusterIds, true);
       }
     };
     
@@ -199,14 +200,14 @@ const Game: React.FC = () => {
     };
   }, [socket, playerId, playSound]);
   
-  // Handle stone placement - completely rebuilt for reliability
+  // Handle stone placement for 3D board
   const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
     // If it's not our turn and not from the server, don't allow placement
     if (!fromServer && playerId !== null && currentPlayer !== playerId) {
       return;
     }
     
-    // Create a new stone with unique ID - positions are now relative to center of board
+    // Create a new stone with unique ID
     const newStone: Stone = {
       id: `stone_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       x,
@@ -296,22 +297,27 @@ const Game: React.FC = () => {
   }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, 
       updateGameState, notifyGameOver, playSound, soundsLoaded]);
   
-  // Handle clustered stones - rebuilt for reliability
-  const handleCluster = useCallback((clusteredStones: Stone[], fromServer = false) => {
-    if (clusteredStones.length === 0) return;
+  // Handle clustered stones for 3D board
+  const handleCluster = useCallback((clusteredStoneIds: string[], fromServer = false) => {
+    if (clusteredStoneIds.length === 0) return;
     
     // Set processing flag to prevent duplicate processing
     processingClusterRef.current = true;
+    
+    // Find the clustered stones objects from IDs
+    const clusteredStones = stones.filter(stone => 
+      clusteredStoneIds.includes(stone.id)
+    );
     
     // Find the player who placed the last stone (previous player)
     const lastPlayerIndex = currentPlayer === 0 ? 1 : 0;
     
     // Create a set of IDs for faster lookups
-    const clusteredStoneIds = new Set(clusteredStones.map(s => s.id));
+    const clusteredStoneIdsSet = new Set(clusteredStoneIds);
     
     // Update the stones list - remove clustered stones
     setStones(prevStones => {
-      const updatedStones = prevStones.filter(stone => !clusteredStoneIds.has(stone.id));
+      const updatedStones = prevStones.filter(stone => !clusteredStoneIdsSet.has(stone.id));
       
       // Update player stones - give clustered stones to the last player
       setPlayers(prevPlayers => {
@@ -365,7 +371,26 @@ const Game: React.FC = () => {
       processingClusterRef.current = false;
     }, 700); // Slightly longer than animation duration for safety
   }, [currentPlayer, playerId, isInRoom, notifyCluster, updateGameState, 
-      gameOver, winner, playSound, soundsLoaded]);
+      gameOver, winner, playSound, soundsLoaded, stones]);
+  
+  // Update stone positions based on 3D board physics
+  const updateStonePositions = useCallback((updates: { id: string; x: number; y: number }[]) => {
+    setStones(prevStones => {
+      // Create a map for faster lookups
+      const updatesMap = new Map(
+        updates.map(update => [update.id, { x: update.x, y: update.y }])
+      );
+      
+      // Update stones with new positions
+      return prevStones.map(stone => {
+        const update = updatesMap.get(stone.id);
+        if (update) {
+          return { ...stone, x: update.x, y: update.y };
+        }
+        return stone;
+      });
+    });
+  }, []);
   
   // Reset game state
   const resetGame = useCallback(() => {
@@ -439,13 +464,15 @@ const Game: React.FC = () => {
                   : 'rgba(246, 211, 101, 0.3)' 
               }}
             ></div>
-            <GameBoard
+            <GameBoard3D
               stones={stones}
+              playAreaRadius={PLAY_AREA_RADIUS}
+              onStonePlace={handleStonePlace}
+              onCluster={handleCluster}
+              updateStonePositions={updateStonePositions}
               currentPlayer={players[currentPlayer]}
-              onStonePlaced={handleStonePlace}
-              onClustered={handleCluster}
+              gameOver={gameOver}
               placementMode="flat"
-              isMyTurn={isMyTurn}
             />
           </div>
           
