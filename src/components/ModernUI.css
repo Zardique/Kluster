@@ -966,4 +966,44 @@
     min-height: 44px;
     min-width: 44px;
   }
+}
+
+/* Mobile restriction message */
+.mobile-restriction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background-color: white;
+  border-radius: 20px;
+  padding: 2rem;
+  margin: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  max-width: 90%;
+}
+
+.mobile-restriction h2 {
+  color: #e74c3c;
+  margin-bottom: 1rem;
+  font-size: 1.8rem;
+}
+
+.mobile-restriction p {
+  margin-bottom: 1rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #333;
+}
+
+.mobile-restriction-icon {
+  margin-top: 1.5rem;
+  color: #3498db;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
 } 
