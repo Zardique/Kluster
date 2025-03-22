@@ -2,8 +2,8 @@ export interface Stone {
   x: number;
   y: number;
   playerId: number;
-  id?: number; // Unique identifier for each stone
-  player?: number | Player; // Legacy property - use playerId instead
+  id: number; // Unique identifier for each stone
+  player?: Player; // Legacy property - use playerId instead
   clustered?: boolean; // Whether this stone is part of a cluster
   onEdge?: boolean; // For 3D view - whether stone is on edge
   radius?: number; // For physics calculations
@@ -25,7 +25,7 @@ export interface GameState {
   players: Player[];
   currentPlayerId: number;
   gameOver: boolean;
-  winner: Player | null;
+  winner: Player | number | null;
 }
 
 export interface MagneticField {

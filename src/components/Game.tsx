@@ -20,7 +20,7 @@ const Game: React.FC<GameProps> = ({ isMultiplayer = false }) => {
   ]);
   const [currentPlayerId, setCurrentPlayerId] = useState(0);
   const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState<Player | null>(null);
+  const [winner, setWinner] = useState<Player | number | null>(null);
   const [animatingStones, setAnimatingStones] = useState<Stone[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showRules, setShowRules] = useState(false);

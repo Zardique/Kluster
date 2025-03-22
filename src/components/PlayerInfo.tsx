@@ -4,36 +4,38 @@ import './PlayerInfo.css';
 
 interface PlayerInfoProps {
   players: Player[];
-  currentPlayer: number;
+  currentPlayerId: number;
   gameOver: boolean;
-  winner: number | null;
+  winner: Player | number | null;
   onReset: () => void;
-  myPlayerId: number | null;
+  isMultiplayer?: boolean;
+  isMyTurn?: boolean;
   isMobile?: boolean;
 }
 
 const PlayerInfo: React.FC<PlayerInfoProps> = ({
   players,
-  currentPlayer,
+  currentPlayerId,
   gameOver,
   winner,
   onReset,
-  myPlayerId,
+  isMultiplayer = false,
+  isMyTurn = false,
   isMobile = false
 }) => {
   // Determine if this is a multiplayer game
-  const isMultiplayer = myPlayerId !== null;
+  const isMultiplayerGame = isMultiplayer;
   
   // Calculate player labels
   const playerLabels = useMemo(() => {
-    if (isMultiplayer) {
+    if (isMultiplayerGame) {
       return players.map(player => 
-        player.id === myPlayerId ? 'You' : 'Opponent'
+        player.id === currentPlayerId ? 'You' : 'Opponent'
       );
     } else {
       return ['Player 1', 'Player 2'];
     }
-  }, [players, myPlayerId, isMultiplayer]);
+  }, [players, currentPlayerId, isMultiplayerGame]);
   
   // Determine active player animation
   const getPlayerCardClass = (playerId: number) => {
@@ -43,13 +45,16 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
     baseClass += ` player-${playerId}-card`;
     
     // Add active class if it's this player's turn
-    if (currentPlayer === playerId) {
+    if (currentPlayerId === playerId) {
       baseClass += ' active-player';
     }
     
     // Add winner/loser class if game over
     if (gameOver && winner !== null) {
-      baseClass += winner === playerId ? ' winner-card' : ' loser-card';
+      const winnerId = typeof winner === 'number' 
+                     ? winner 
+                     : winner.id;
+      baseClass += winnerId === playerId ? ' winner-card' : ' loser-card';
     }
     
     return baseClass;
@@ -92,7 +97,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
               {renderMagnetIndicators(player.stonesLeft, 12)}
             </div>
             
-            {currentPlayer === player.id && !gameOver && (
+            {currentPlayerId === player.id && !gameOver && (
               <div className="current-turn-indicator">
                 <div className="turn-pulse"></div>
                 <span>Current Turn</span>
@@ -106,13 +111,21 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
         <h2>Current Turn</h2>
         <div className="current-player">
           {gameOver ? (
-            <span className="game-over-text">Game Over</span>
+            <span className="game-over-message">
+              Game Over! {
+                typeof winner === 'object' && winner !== null 
+                  ? winner.name 
+                  : typeof winner === 'number'
+                    ? players.find(p => p.id === winner)?.name || 'Someone'
+                    : 'Someone'
+              } Wins!
+            </span>
           ) : (
             <>
-              <span className={`player-turn player-${currentPlayer}-text`}>
-                {playerLabels[currentPlayer]}'s Turn
+              <span className={`player-turn player-${currentPlayerId}-text`}>
+                {playerLabels[currentPlayerId]}'s Turn
               </span>
-              {isMultiplayer && currentPlayer !== myPlayerId && (
+              {isMultiplayerGame && !isMyTurn && (
                 <div className="waiting-message">
                   Waiting for opponent to place a stone...
                 </div>
@@ -147,7 +160,7 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
       {gameOver && (
         <div className="game-actions">
           <button className="reset-button" onClick={onReset}>
-            {isMultiplayer ? 'Request Rematch' : 'Play Again'}
+            {isMultiplayerGame ? 'Request Rematch' : 'Play Again'}
           </button>
         </div>
       )}
