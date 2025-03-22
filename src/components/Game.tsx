@@ -344,29 +344,14 @@ const Game: React.FC = () => {
       return;
     }
     
-    // Calculate the new center of the cluster
-    const centerX = clusteredStones.reduce((sum, stone) => sum + stone.x, 0) / clusteredStones.length;
-    const centerY = clusteredStones.reduce((sum, stone) => sum + stone.y, 0) / clusteredStones.length;
+    // Determine the opponent who receives the stones (important: in Kluster, stones go to the opponent)
+    const opponentId = stonePlayer.id === 0 ? 1 : 0;
     
-    // Create a new stone at the center
-    const newStone: Stone = {
-      id: `stone_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      x: centerX,
-      y: centerY,
-      radius: STONE_RADIUS,
-      height: STONE_HEIGHT,
-      player: stonePlayer,
-      clustered: false,
-      onEdge: false
-    };
-    
-    console.log('Created new stone at center:', newStone);
-    
-    // Remove the clustered stones and add the new one
+    // Remove the clustered stones from the board
     setStones(prevStones => {
       const remainingStones = prevStones.filter(stone => !clusteredStoneIds.includes(stone.id));
       
-      // Play cluster sound effect
+      // Play cluster sound effect (use a more dramatic sound for clustering)
       if (soundsLoaded.current) {
         playSound(GAME_SOUNDS.placeStone);
       }
@@ -376,14 +361,14 @@ const Game: React.FC = () => {
         notifyCluster(clusteredStones);
       }
       
-      return [...remainingStones, newStone];
+      return remainingStones; // Don't add a new stone - stones get removed from board
     });
     
-    // Update player's stones left - the player gets back stones
+    // Update opponent's stones - in Kluster, clustered stones go to the opponent
     setPlayers(prevPlayers => 
       prevPlayers.map(player => 
-        player.id === stonePlayer.id
-          ? { ...player, stonesLeft: player.stonesLeft + (clusteredStones.length - 1) }
+        player.id === opponentId
+          ? { ...player, stonesLeft: player.stonesLeft + clusteredStones.length }
           : player
       )
     );
@@ -392,9 +377,11 @@ const Game: React.FC = () => {
     setTimeout(() => {
       processingClusterRef.current = false;
       
-      // Check for game-ending conditions
+      // Check for game-ending conditions - in Kluster, first player to place all stones wins
+      // So we check if the player who lost their stones now has 0 stones left
       const playerStones = players.find(p => p.id === stonePlayer.id)?.stonesLeft ?? 0;
-      if (playerStones + (clusteredStones.length - 1) >= INITIAL_STONES_PER_PLAYER) {
+      
+      if (playerStones === 0 && !stones.some(s => s.player.id === stonePlayer.id && !clusteredStoneIds.includes(s.id))) {
         setGameOver(true);
         setWinner(stonePlayer.id);
         

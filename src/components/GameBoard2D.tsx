@@ -39,6 +39,9 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
   // Track stones that are being clustered for animation
   const [clusteringStones, setClusteringStones] = useState<string[]>([]);
   
+  // Track stones with magnetic pull effect (close to clustering)
+  const [magneticPullStones, setMagneticPullStones] = useState<string[]>([]);
+  
   // Calculate and track potential clustering lines for debugging
   const [debugLines, setDebugLines] = useState<{from: Stone, to: Stone, distance: number}[]>([]);
   
@@ -128,10 +131,12 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
   const updateDebugVisuals = useCallback(() => {
     if (gameOver) {
       setDebugLines([]);
+      setMagneticPullStones([]);
       return;
     }
     
     const newLines: {from: Stone, to: Stone, distance: number}[] = [];
+    const potentialMagneticStones: string[] = [];
     
     // Group stones by player
     const stonesByPlayer = new Map<number, Stone[]>();
@@ -162,12 +167,23 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
               to: stone2,
               distance
             });
+            
+            // If they're very close, add magnetic pull effect
+            if (distance < CLUSTER_THRESHOLD * 1.2) {
+              if (!potentialMagneticStones.includes(stone1.id)) {
+                potentialMagneticStones.push(stone1.id);
+              }
+              if (!potentialMagneticStones.includes(stone2.id)) {
+                potentialMagneticStones.push(stone2.id);
+              }
+            }
           }
         }
       }
     });
     
     setDebugLines(newLines);
+    setMagneticPullStones(potentialMagneticStones);
   }, [visibleStones, gameOver]);
   
   // Update debug visuals when stones change
@@ -374,6 +390,36 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     return true;
   }, [mousePosition, playAreaRadius, visibleStones]);
   
+  // Render the stones with clustering and magnetic pull animations
+  const renderStones = useMemo(() => {
+    return visibleStones.map(stone => {
+      const isClusteringStone = clusteringStones.includes(stone.id);
+      const isMagneticPullStone = magneticPullStones.includes(stone.id) && !isClusteringStone;
+      
+      const stoneClassName = `
+        stone
+        player-${stone.player.id}
+        ${isClusteringStone ? 'clustering' : ''}
+        ${isMagneticPullStone ? 'magnetic-pull' : ''}
+      `;
+      
+      return (
+        <div
+          key={stone.id}
+          className={stoneClassName.trim()}
+          style={{
+            width: `${STONE_RADIUS * 2}px`,
+            height: `${STONE_RADIUS * 2}px`,
+            left: `${playAreaRadius + stone.x - STONE_RADIUS}px`,
+            top: `${playAreaRadius + stone.y - STONE_RADIUS}px`,
+          }}
+        >
+          <div className="stone-glow"></div>
+        </div>
+      );
+    });
+  }, [visibleStones, clusteringStones, magneticPullStones, playAreaRadius]);
+  
   return (
     <div 
       ref={boardRef}
@@ -415,21 +461,8 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
         />
       ))}
       
-      {/* Visible stones */}
-      {visibleStones.map(stone => (
-        <div
-          key={stone.id}
-          className={`stone player-${stone.player.id} ${clusteringStones.includes(stone.id) ? 'clustering' : ''}`}
-          style={{
-            width: `${STONE_RADIUS * 2}px`,
-            height: `${STONE_RADIUS * 2}px`,
-            left: `${playAreaRadius + stone.x - STONE_RADIUS}px`,
-            top: `${playAreaRadius + stone.y - STONE_RADIUS}px`,
-          }}
-        >
-          <div className="stone-glow"></div>
-        </div>
-      ))}
+      {/* Visible stones - now using memoized generated elements */}
+      {renderStones}
       
       {/* Ghost stone while dragging */}
       {isDragging && dragPosition && (

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Player } from '../types';
-import './ModernUI.css';
+import './PlayerInfo.css';
 
 interface PlayerInfoProps {
   players: Player[];
@@ -18,108 +18,141 @@ const PlayerInfo: React.FC<PlayerInfoProps> = ({
   gameOver,
   winner,
   onReset,
-  myPlayerId = null, // Default to null for single-player mode
+  myPlayerId,
   isMobile = false
 }) => {
-  const [animatingPlayer, setAnimatingPlayer] = useState<number | null>(null);
-  const [prevStonesLeft, setPrevStonesLeft] = useState<Record<number, number>>({});
+  // Determine if this is a multiplayer game
+  const isMultiplayer = myPlayerId !== null;
   
-  // Track changes in stones left to detect when a player receives clustered stones
-  useEffect(() => {
-    players.forEach(player => {
-      const prevStones = prevStonesLeft[player.id] || player.stonesLeft;
-      
-      // If the player has more stones than before, they received clustered stones
-      if (player.stonesLeft > prevStones) {
-        setAnimatingPlayer(player.id);
-        
-        // Clear animation after a delay
-        setTimeout(() => {
-          setAnimatingPlayer(null);
-        }, 1500);
-      }
-      
-      // Update previous stones count
-      setPrevStonesLeft(prev => ({
-        ...prev,
-        [player.id]: player.stonesLeft
-      }));
-    });
-  }, [players, prevStonesLeft]);
+  // Calculate player labels
+  const playerLabels = useMemo(() => {
+    if (isMultiplayer) {
+      return players.map(player => 
+        player.id === myPlayerId ? 'You' : 'Opponent'
+      );
+    } else {
+      return ['Player 1', 'Player 2'];
+    }
+  }, [players, myPlayerId, isMultiplayer]);
   
-  const cardClass = (player: Player, index: number) => {
-    const isCurrentPlayer = index === currentPlayer;
-    const isPlayerTurn = `player-card ${isCurrentPlayer ? 'active' : ''}`;
-    const isThisPlayer = myPlayerId !== null && index === myPlayerId ? ' you' : '';
-    const isAnimating = animatingPlayer === index ? ' receiving' : '';
+  // Determine active player animation
+  const getPlayerCardClass = (playerId: number) => {
+    let baseClass = 'player-card';
     
-    return `${isPlayerTurn}${isThisPlayer}${isAnimating}`;
+    // Add player-specific color class
+    baseClass += ` player-${playerId}-card`;
+    
+    // Add active class if it's this player's turn
+    if (currentPlayer === playerId) {
+      baseClass += ' active-player';
+    }
+    
+    // Add winner/loser class if game over
+    if (gameOver && winner !== null) {
+      baseClass += winner === playerId ? ' winner-card' : ' loser-card';
+    }
+    
+    return baseClass;
   };
   
-  // Adjust content based on device
-  const rulesList = isMobile ? (
-    <ul>
-      <li>Place magnets on the board.</li>
-      <li>Clustered magnets go to the opposite player.</li>
-      <li>First to place all magnets wins!</li>
-    </ul>
-  ) : (
-    <ul>
-      <li>Players take turns placing magnets on the game board.</li>
-      <li>Magnets naturally attract each other when placed nearby.</li>
-      <li>When magnets cluster together, they go to the opponent's pile.</li>
-      <li>First player to place all their magnets on the board wins!</li>
-    </ul>
-  );
+  // Generate magnet indicators based on stones left
+  const renderMagnetIndicators = (stonesLeft: number, maxStones: number) => {
+    const indicators = [];
+    for (let i = 0; i < maxStones; i++) {
+      indicators.push(
+        <div 
+          key={i} 
+          className={`magnet-indicator ${i < stonesLeft ? 'magnet-available' : 'magnet-used'}`}
+        />
+      );
+    }
+    return indicators;
+  };
   
   return (
-    <div className="side-panel">
-      <h2 className="game-title">Kluster</h2>
+    <div className="player-info-container">
+      <div className="game-title">
+        <h1>Kluster</h1>
+        <div className="glow-effect"></div>
+      </div>
       
       <div className="player-cards">
         {players.map((player, index) => (
-          <div 
-            key={player.id} 
-            className={cardClass(player, index)}
-          >
-            <h3 className="player-name">
-              {player.id === myPlayerId ? 'You' : 'Opponent'}
-            </h3>
-            <div className="stones-count">
-              <span className={animatingPlayer === player.id ? 'count-changing' : ''}>
-                {player.stonesLeft}
-              </span>
+          <div key={player.id} className={getPlayerCardClass(player.id)}>
+            <div className="player-name">
+              {playerLabels[index]}
             </div>
-            <div className="stone-indicators">
-              {Array.from({ length: Math.min(player.stonesLeft, 8) }).map((_, i) => (
-                <div key={i} className="stone-indicator" />
-              ))}
-              {player.stonesLeft > 8 && <span>+{player.stonesLeft - 8}</span>}
+            
+            <div className="stones-counter">
+              <span className="stones-number">{player.stonesLeft}</span>
+              <span className="stones-label">magnets left</span>
             </div>
+            
+            <div className="magnet-indicators">
+              {renderMagnetIndicators(player.stonesLeft, 12)}
+            </div>
+            
+            {currentPlayer === player.id && !gameOver && (
+              <div className="current-turn-indicator">
+                <div className="turn-pulse"></div>
+                <span>Current Turn</span>
+              </div>
+            )}
           </div>
         ))}
       </div>
       
-      <div className="turn-indicator">
-        <p className="turn-text">Current Turn</p>
-        <p className={`player-turn player-${currentPlayer + 1}-turn`}>
-          {myPlayerId !== null && currentPlayer === myPlayerId ? 'Your Turn' : 'Opponent\'s Turn'}
-        </p>
-        <p className="instruction">
-          {myPlayerId !== null && currentPlayer === myPlayerId 
-            ? 'Drag and drop a stone into the play area' 
-            : 'Waiting for opponent to place a stone...'}
-        </p>
+      <div className="turn-info">
+        <h2>Current Turn</h2>
+        <div className="current-player">
+          {gameOver ? (
+            <span className="game-over-text">Game Over</span>
+          ) : (
+            <>
+              <span className={`player-turn player-${currentPlayer}-text`}>
+                {playerLabels[currentPlayer]}'s Turn
+              </span>
+              {isMultiplayer && currentPlayer !== myPlayerId && (
+                <div className="waiting-message">
+                  Waiting for opponent to place a stone...
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
       
       <div className="game-rules">
-        <h3 className="rules-title">Game Rules</h3>
-        {rulesList}
+        <h2>Game Rules</h2>
+        <ul className="rules-list">
+          <li>
+            <span className="rule-icon">1</span>
+            <span className="rule-text">Players take turns placing magnets on the game board.</span>
+          </li>
+          <li>
+            <span className="rule-icon">2</span>
+            <span className="rule-text">Magnets naturally attract each other when placed nearby.</span>
+          </li>
+          <li>
+            <span className="rule-icon">3</span>
+            <span className="rule-text">When magnets cluster together, they go to the opponent's pile.</span>
+          </li>
+          <li>
+            <span className="rule-icon">4</span>
+            <span className="rule-text">First player to place all their magnets on the board wins!</span>
+          </li>
+        </ul>
       </div>
+      
+      {gameOver && (
+        <div className="game-actions">
+          <button className="reset-button" onClick={onReset}>
+            {isMultiplayer ? 'Request Rematch' : 'Play Again'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
-
-const PLAYER_COLORS = ['#3498db', '#e74c3c']; // Blue for Player 1, Red for Player 2
 
 export default PlayerInfo; 

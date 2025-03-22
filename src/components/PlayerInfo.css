@@ -1,0 +1,460 @@
+/* PlayerInfo.css - Modern, vibrant styling for the player information panels */
+
+.player-info-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 500px;
+  padding: 20px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #ffffff;
+}
+
+/* Game title with glow effect */
+.game-title {
+  position: relative;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.game-title h1 {
+  font-size: 4rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #6e8efb 0%, #a777e3 50%, #e935c1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+  margin: 0;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  position: relative;
+  text-shadow: 0 5px 15px rgba(110, 142, 251, 0.4);
+}
+
+.glow-effect {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle,
+    rgba(110, 142, 251, 0.4) 0%,
+    rgba(167, 119, 227, 0.2) 50%,
+    rgba(233, 53, 193, 0) 70%
+  );
+  filter: blur(20px);
+  z-index: -1;
+  opacity: 0.7;
+  animation: pulse-glow 4s infinite alternate;
+}
+
+@keyframes pulse-glow {
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  100% {
+    opacity: 0.7;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* Player cards */
+.player-cards {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.player-card {
+  flex: 1;
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.player-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.player-card.active-player::before {
+  opacity: 1;
+  animation: shine 2s infinite;
+}
+
+@keyframes shine {
+  0% {
+    background-position: -100px;
+  }
+  40%, 100% {
+    background-position: 200px;
+  }
+}
+
+/* Player-specific card styling */
+.player-0-card {
+  background: linear-gradient(135deg, rgba(46, 81, 187, 0.2) 0%, rgba(17, 24, 39, 0.8) 100%);
+  border-left: 3px solid #6e8efb;
+}
+
+.player-1-card {
+  background: linear-gradient(135deg, rgba(225, 79, 79, 0.2) 0%, rgba(17, 24, 39, 0.8) 100%);
+  border-left: 3px solid #f6d365;
+}
+
+.active-player {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+
+.winner-card {
+  animation: winner-pulse 2s infinite;
+  border: 2px solid rgba(46, 213, 115, 0.7);
+}
+
+.loser-card {
+  opacity: 0.7;
+}
+
+@keyframes winner-pulse {
+  0% {
+    box-shadow: 0 0 10px rgba(46, 213, 115, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(46, 213, 115, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(46, 213, 115, 0.5);
+  }
+}
+
+/* Player name */
+.player-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  margin: 0;
+}
+
+/* Stones counter */
+.stones-counter {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.stones-number {
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 0%, #d1d5db 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.stones-label {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Magnet indicators */
+.magnet-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.magnet-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.player-0-card .magnet-available {
+  background: linear-gradient(135deg, #6e8efb 0%, #5563de 100%);
+  box-shadow: 0 0 8px rgba(110, 142, 251, 0.5);
+}
+
+.player-1-card .magnet-available {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  box-shadow: 0 0 8px rgba(246, 211, 101, 0.5);
+}
+
+.magnet-used {
+  background: rgba(148, 163, 184, 0.2);
+  box-shadow: none;
+  opacity: 0.3;
+}
+
+/* Current turn indicator */
+.current-turn-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  width: fit-content;
+  margin-top: 5px;
+  position: relative;
+}
+
+.turn-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: turn-pulse 1.5s infinite;
+}
+
+.player-0-card .turn-pulse {
+  background-color: #6e8efb;
+  box-shadow: 0 0 10px rgba(110, 142, 251, 0.7);
+}
+
+.player-1-card .turn-pulse {
+  background-color: #f6d365;
+  box-shadow: 0 0 10px rgba(246, 211, 101, 0.7);
+}
+
+@keyframes turn-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+}
+
+/* Turn information */
+.turn-info {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.turn-info h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 15px 0;
+  color: #e2e8f0;
+}
+
+.current-player {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+  text-align: center;
+}
+
+.player-0-text {
+  color: #6e8efb;
+  text-shadow: 0 0 10px rgba(110, 142, 251, 0.5);
+}
+
+.player-1-text {
+  color: #f6d365;
+  text-shadow: 0 0 10px rgba(246, 211, 101, 0.5);
+}
+
+.waiting-message {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin-top: 8px;
+  text-align: center;
+  font-style: italic;
+  animation: pulse-text 2s infinite;
+}
+
+@keyframes pulse-text {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+.game-over-text {
+  color: #f87171;
+  font-size: 1.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-shadow: 0 0 15px rgba(248, 113, 113, 0.5);
+  animation: game-over-pulse 1.5s infinite alternate;
+}
+
+@keyframes game-over-pulse {
+  0% {
+    text-shadow: 0 0 10px rgba(248, 113, 113, 0.5);
+    transform: scale(0.98);
+  }
+  100% {
+    text-shadow: 0 0 20px rgba(248, 113, 113, 0.8);
+    transform: scale(1.02);
+  }
+}
+
+/* Game rules */
+.game-rules {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.game-rules h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 15px 0;
+  color: #e2e8f0;
+}
+
+.rules-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.rules-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rule-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6e8efb 0%, #5563de 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(110, 142, 251, 0.5);
+}
+
+.rule-text {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #e2e8f0;
+}
+
+/* Game actions */
+.game-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.reset-button {
+  background: linear-gradient(135deg, #6e8efb 0%, #5563de 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(110, 142, 251, 0.4);
+}
+
+.reset-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(110, 142, 251, 0.6);
+}
+
+.reset-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 10px rgba(110, 142, 251, 0.4);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .player-info-container {
+    padding: 15px;
+    gap: 15px;
+  }
+  
+  .game-title h1 {
+    font-size: 3rem;
+  }
+  
+  .player-cards {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .player-card {
+    padding: 15px;
+  }
+  
+  .player-name {
+    font-size: 1.3rem;
+  }
+  
+  .stones-number {
+    font-size: 2rem;
+  }
+  
+  .current-player {
+    font-size: 1.4rem;
+  }
+  
+  .rules-list li {
+    gap: 8px;
+  }
+  
+  .rule-text {
+    font-size: 0.85rem;
+  }
+} 
