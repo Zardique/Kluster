@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import Matter from 'matter-js';
 import { Stone } from '../types';
+import { stoneIdToString } from '../utils/stoneUtils';
 
 // Constants for physics simulation
 const MAGNETIC_FORCE_STRENGTH = 0.002; // Increased strength for more noticeable effect
 const MAGNETIC_FORCE_DISTANCE = 100;
 const CLUSTER_THRESHOLD = 15; // Distance threshold for stones to be considered clustered
+const STONE_RADIUS = 20; // Assuming a default radius if not provided
 
 interface UsePhysicsProps {
   stones: Stone[];
@@ -23,6 +25,10 @@ const usePhysics = ({ stones, playAreaRadius, onCluster, updateStonePositions }:
   const lastClusterCheckRef = useRef<number>(0);
   const clusterCheckIntervalRef = useRef<number>(500); // Check for clusters every 500ms
   const lastUpdatedStonesRef = useRef<Stone[]>([]);
+  const worldCenterX = useRef<number>(playAreaRadius);
+  const worldCenterY = useRef<number>(playAreaRadius);
+  const potentialClusters = useRef<string[]>([]);
+  const running = useRef<boolean>(true);
 
   // Debug: Log stones when they change
   useEffect(() => {
@@ -115,59 +121,69 @@ const usePhysics = ({ stones, playAreaRadius, onCluster, updateStonePositions }:
     console.log('Updating stones in physics engine:', stones);
 
     const engine = engineRef.current;
-    const currentBodies = new Map(bodiesRef.current);
+    const currentBodies = bodiesRef.current;
     
-    // Add new stones or update existing ones
+    // Create or update bodies for each stone
     stones.forEach(stone => {
+      // Skip clustered stones in the physics simulation
       if (!stone.clustered) {
-        if (currentBodies.has(stone.id)) {
+        const stoneIdStr = stoneIdToString(stone.id);
+        
+        if (currentBodies.has(stoneIdStr)) {
           // Update existing body
-          const body = currentBodies.get(stone.id)!;
-          Matter.Body.setPosition(body, { x: stone.x, y: stone.y });
-          console.log('Updated existing body position:', stone.id, stone.x, stone.y);
-        } else {
-          // Create new body
-          const body = Matter.Bodies.circle(stone.x, stone.y, stone.radius, {
-            restitution: 0.7,
-            friction: 0.1,
-            frictionAir: 0.02,
-            render: {
-              fillStyle: stone.player.id === 0 ? '#3498db' : '#e74c3c',
-              strokeStyle: '#000',
-              lineWidth: 1
-            },
-            collisionFilter: { group: 0, category: 0x0001, mask: 0x0003 }
+          const body = currentBodies.get(stoneIdStr)!;
+          
+          Matter.Body.setPosition(body, {
+            x: stone.x + worldCenterX.current,
+            y: stone.y + worldCenterY.current
           });
           
-          // Add custom property to identify the stone
-          (body as any).stoneId = stone.id;
-          (body as any).player = stone.player;
+          console.log('Updated existing body position:', stoneIdStr, stone.x, stone.y);
+        } else {
+          // Create a new body
+          const body = createBody({
+            x: stone.x + worldCenterX.current, 
+            y: stone.y + worldCenterY.current,
+            radius: stone.radius || STONE_RADIUS,
+            render: {
+              fillStyle: typeof stone.player === 'object' && stone.player !== null ? 
+                (stone.player.id === 0 ? '#3498db' : '#e74c3c') : 
+                (stone.playerId === 0 ? '#3498db' : '#e74c3c'),
+              strokeStyle: '#FFFFFF',
+              lineWidth: 1
+            }
+          });
           
-          Matter.Composite.add(engine.world, [body]);
-          currentBodies.set(stone.id, body);
-          console.log('Created new body:', stone.id, stone.x, stone.y);
+          // Add to the simulation
+          Matter.Composite.add(engine.world, body);
+          
+          // Add custom property to identify the stone
+          (body as any).stoneId = stoneIdStr;
+          (body as any).playerId = stone.playerId;
+          
+          // Store in the map
+          currentBodies.set(stoneIdStr, body);
+          console.log('Created new body:', stoneIdStr, stone.x, stone.y);
         }
-      } else if (currentBodies.has(stone.id)) {
-        // Remove clustered stones from the physics engine
-        const body = currentBodies.get(stone.id)!;
+      } else if (currentBodies.has(stoneIdToString(stone.id))) {
+        // Remove clustered stones from the simulation
+        const body = currentBodies.get(stoneIdToString(stone.id))!;
         Matter.Composite.remove(engine.world, body);
-        currentBodies.delete(stone.id);
-        console.log('Removed clustered body:', stone.id);
+        currentBodies.delete(stoneIdToString(stone.id));
+        console.log('Removed clustered body:', stoneIdToString(stone.id));
       }
     });
     
-    // Remove stones that no longer exist
-    currentBodies.forEach((body, id) => {
-      if (!stones.some(stone => stone.id === id)) {
+    // Remove bodies for stones that no longer exist
+    currentBodies.forEach((body, idStr) => {
+      const idExists = stones.some(stone => stoneIdToString(stone.id) === idStr);
+      if (!idExists) {
         Matter.Composite.remove(engine.world, body);
-        currentBodies.delete(id);
-        console.log('Removed non-existent body:', id);
+        currentBodies.delete(idStr);
+        console.log('Removed non-existent body:', idStr);
       }
     });
-    
-    bodiesRef.current = currentBodies;
-    console.log('Bodies in physics engine:', bodiesRef.current.size);
-  }, [stones]);
+  }, [stones, playAreaRadius]);
 
   // Apply magnetic forces and check for clusters
   useEffect(() => {
@@ -301,14 +317,83 @@ const usePhysics = ({ stones, playAreaRadius, onCluster, updateStonePositions }:
     });
     
     // Add custom property to identify the stone
-    (body as any).stoneId = stone.id;
-    (body as any).player = stone.player;
+    (body as any).stoneId = stoneIdToString(stone.id);
+    (body as any).playerId = stone.playerId;
     
     Matter.Composite.add(engine.world, [body]);
-    bodiesRef.current.set(stone.id, body);
+    bodiesRef.current.set(stoneIdToString(stone.id), body);
     
     return body;
   };
+
+  // Create a stone body with the given options
+  const createBody = (options: {
+    x: number;
+    y: number;
+    radius: number;
+    render: {
+      fillStyle: string;
+      strokeStyle: string;
+      lineWidth: number;
+    };
+  }) => {
+    return Matter.Bodies.circle(
+      options.x,
+      options.y,
+      options.radius,
+      {
+        restitution: 0.9,
+        friction: 0.1,
+        density: 0.5,
+        render: options.render
+      }
+    );
+  };
+
+  // Handle collisions for potential clustering
+  useEffect(() => {
+    if (!engineRef.current) return;
+    
+    const engine = engineRef.current;
+    
+    Matter.Events.on(engine, 'collisionStart', (event) => {
+      if (!running.current) return;
+      
+      // Get collisions
+      const pairs = event.pairs;
+      
+      for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i];
+        
+        // Skip if either body is the boundary
+        if (!pair.bodyA || !pair.bodyB || 
+            pair.bodyA.label === 'boundary' || 
+            pair.bodyB.label === 'boundary') {
+          continue;
+        }
+        
+        // Get stone IDs from bodies
+        const stoneAId = (pair.bodyA as any).stoneId;
+        const stoneBId = (pair.bodyB as any).stoneId;
+        
+        if (stoneAId && stoneBId) {
+          // Get player IDs
+          const playerAId = (pair.bodyA as any).playerId;
+          const playerBId = (pair.bodyB as any).playerId;
+          
+          // If same player stones are colliding, they might cluster
+          if (playerAId === playerBId) {
+            console.log('Same player stones colliding:', stoneAId, stoneBId);
+            
+            // Add to potential clusters for further processing
+            if (!potentialClusters.current.includes(`${stoneAId},${stoneBId}`)) {
+              potentialClusters.current.push(`${stoneAId},${stoneBId}`);
+            }
+          }
+        }
+      }
+    });
+  }, []);
 
   return {
     containerRef,

@@ -67,22 +67,37 @@ const ATTRACTION_FACTOR = 1.5; // How strongly stones are attracted to each othe
 const checkClustering = (stones) => {
   if (stones.length < 2) return { hasClusters: false, clusters: [] };
   
+  // Track which stones belong to which player
+  const playerStones = {};
+  stones.forEach((stone, index) => {
+    const playerId = stone.playerId;
+    if (!playerStones[playerId]) {
+      playerStones[playerId] = [];
+    }
+    playerStones[playerId].push({ stone, index });
+  });
+  
   // Build a graph based on physical contact (not just magnetic field interaction)
   const graph = {};
   stones.forEach((stone, i) => {
     graph[i] = [];
-    stones.forEach((otherStone, j) => {
-      if (i !== j) {
-        const dx = stone.x - otherStone.x;
-        const dy = stone.y - otherStone.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Stones cluster only when they physically touch or overlap
-        if (distance < PHYSICAL_CONTACT_THRESHOLD) {
-          graph[i].push(j);
+    
+    // Only check clustering between stones of the same player
+    const playerId = stone.playerId;
+    if (playerStones[playerId]) {
+      playerStones[playerId].forEach(({ stone: otherStone, index: j }) => {
+        if (i !== j) {
+          const dx = stone.x - otherStone.x;
+          const dy = stone.y - otherStone.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // Stones cluster only when they physically touch or overlap
+          if (distance < PHYSICAL_CONTACT_THRESHOLD) {
+            graph[i].push(j);
+          }
         }
-      }
-    });
+      });
+    }
   });
   
   // Find connected components (clusters) using DFS
@@ -115,12 +130,16 @@ const checkClustering = (stones) => {
     x: stone.x,
     y: stone.y,
     radius: MAGNETIC_FIELD_RADIUS,
-    playerId: stone.playerId
+    playerId: stone.playerId,
+    id: stone.id // Include ID for tracking
   }));
   
   return {
     hasClusters: clusters.length > 0,
-    clusters: clusters.map(cluster => cluster.map(index => stones[index])),
+    clusters: clusters.map(cluster => cluster.map(index => ({
+      ...stones[index],
+      clustered: true // Mark the stone as clustered for client-side handling
+    }))),
     magneticFields
   };
 };
@@ -206,51 +225,87 @@ io.on('connection', (socket) => {
   });
   
   // Handle stone placement
-  socket.on('place_stone', ({ roomId, x, y, playerId }) => {
+  socket.on('place_stone', ({ roomId, x, y }) => {
     try {
       const room = gameRooms.get(roomId);
       
-      if (!room) return;
-      
-      // Only allow the current player to place a stone
-      if (room.gameState.currentPlayer !== playerId) return;
+      if (!room || room.gameState.gameOver) return;
       
       room.lastActivity = Date.now();
       
-      // Update the game state with the new stone
-      const newStone = { x, y, playerId };
+      // Determine which player is making the move
+      const playerIndex = room.players.indexOf(socket.id);
+      if (playerIndex === -1 || playerIndex !== room.gameState.currentPlayer) return;
+      
+      // Create a new stone with standard properties
+      const newStone = {
+        x,
+        y,
+        playerId: playerIndex,
+        player: room.gameState.players[playerIndex], // Add player object for backward compatibility
+        id: Math.floor(Math.random() * 10000), // Add a unique numeric id
+        radius: STONE_RADIUS,
+        clustered: false
+      };
+      
+      // Add the new stone to the game state
       room.gameState.stones.push(newStone);
       
-      // Check for magnetic clustering after adding the new stone
+      // Emit to all clients in the room
+      io.to(roomId).emit('stone_placed', {
+        x,
+        y,
+        playerId: playerIndex,
+        id: newStone.id,
+        radius: newStone.radius
+      });
+      
+      // Check for clustering with existing stones
       const clusterResult = checkClustering(room.gameState.stones);
       
-      // Broadcast the stone placement to all players
-      io.to(roomId).emit('stone_placed', { x, y, playerId });
-      
-      // If clusters formed, handle them
       if (clusterResult.hasClusters) {
-        // Get all stones that are in clusters
+        console.log('Clusters detected!', clusterResult.clusters);
+        
+        // Collect all stones from all clusters
         const clusteredStones = clusterResult.clusters.flat();
         
-        // Send clustered stones to clients
-        io.to(roomId).emit('stones_clustered', { 
+        // Notify clients to show clustering animation
+        io.to(roomId).emit('stones_clustered', {
           clusteredStones,
           // Include information about the magnetic fields for visualization
           magneticFields: clusterResult.magneticFields
         });
         
-        console.log(`Cluster occurred in room ${roomId}, ${clusteredStones.length} stones clustered`);
+        // Add stones to player inventory
+        room.gameState.players[playerIndex].stonesLeft += clusteredStones.length;
         
-        // Update the game state by removing clustered stones
-        const clusterStoneIds = new Set(clusteredStones.map(s => `${s.x},${s.y}`));
-        room.gameState.stones = room.gameState.stones.filter(s => !clusterStoneIds.has(`${s.x},${s.y}`));
+        // Remove clustered stones from the board
+        room.gameState.stones = room.gameState.stones.filter(stone => {
+          return !clusteredStones.some(
+            clusteredStone => 
+              clusteredStone.x === stone.x && 
+              clusteredStone.y === stone.y && 
+              clusteredStone.playerId === stone.playerId
+          );
+        });
+      } else {
+        // If no clustering, move to the next player's turn
+        room.gameState.currentPlayer = (room.gameState.currentPlayer + 1) % 2;
         
-        // Add points to current player
-        room.gameState.players[playerId].stonesLeft -= clusteredStones.filter(s => s.playerId === playerId).length;
+        // Decrement stones left for the current player
+        const player = room.gameState.players[playerIndex];
+        player.stonesLeft--;
         
-        // Update game state after clustering
-        io.to(roomId).emit('game_state_updated', { gameState: room.gameState });
+        // Check for game over (player has no stones left)
+        if (player.stonesLeft <= 0) {
+          room.gameState.gameOver = true;
+          room.gameState.winner = room.gameState.players[playerIndex]; // Return player object as winner
+          io.to(roomId).emit('game_ended', { winner: room.gameState.players[playerIndex] });
+        }
       }
+      
+      // Update game state after clustering
+      io.to(roomId).emit('game_state_updated', { gameState: room.gameState });
     } catch (error) {
       console.error('Error placing stone:', error);
     }
