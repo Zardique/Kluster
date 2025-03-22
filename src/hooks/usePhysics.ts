@@ -309,7 +309,9 @@ const usePhysics = ({ stones, playAreaRadius, onCluster, updateStonePositions }:
       friction: 0.1,
       frictionAir: 0.02,
       render: {
-        fillStyle: stone.player.id === 0 ? '#3498db' : '#e74c3c',
+        fillStyle: typeof stone.player === 'object' && stone.player !== null ? 
+          (stone.player.id === 0 ? '#3498db' : '#e74c3c') : 
+          (stone.playerId === 0 ? '#3498db' : '#e74c3c'),
         strokeStyle: '#000',
         lineWidth: 1
       },
