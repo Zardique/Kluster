@@ -2,12 +2,12 @@
   position: relative;
   width: 550px;
   height: 550px;
-  background-color: var(--bg-color);
+  background-color: #1a1a2e;
   border-radius: 50%;
-  border: 3px solid var(--player1-color);
-  box-shadow: 0 0 25px rgba(0, 0, 0, 0.3);
-  transition: border-color 0.3s ease;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  border: 4px solid var(--player-color, #6e8efb);
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
   transform-style: preserve-3d;
   perspective: 1200px;
   will-change: transform;
@@ -30,51 +30,227 @@
   pointer-events: none;
 }
 
+.board-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+.concentric-circle {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.circle-1 {
+  width: 80%;
+  height: 80%;
+  top: 10%;
+  left: 10%;
+}
+
+.circle-2 {
+  width: 60%;
+  height: 60%;
+  top: 20%;
+  left: 20%;
+}
+
+.circle-3 {
+  width: 40%;
+  height: 40%;
+  top: 30%;
+  left: 30%;
+}
+
+.circle-4 {
+  width: 20%;
+  height: 20%;
+  top: 40%;
+  left: 40%;
+}
+
+.board-center {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.3);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.magnetic-field {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.magnetic-field-visualization {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 5; /* Above the board but below stones */
+  animation: pulseMagneticField 4s infinite alternate;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+}
+
+@keyframes pulseMagneticField {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.05);
+    opacity: 0.3;
+  }
+}
+
+.magnetic-field-preview {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 6;
+  animation: pulseMagneticFieldPreview 3s infinite alternate;
+}
+
+@keyframes pulseMagneticFieldPreview {
+  0% {
+    transform: scale(0.97);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.03);
+    opacity: 0.4;
+  }
+}
+
 .stone {
   position: absolute;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   pointer-events: none;
   will-change: transform;
   backface-visibility: hidden;
   top: 50%;
   left: 50%;
-}
-
-.stone.player-1 {
-  background: linear-gradient(135deg, #6e8efb, #4a6cf7);
-  border: 2px solid #9bb0fc;
-}
-
-.stone.player-2 {
-  background: linear-gradient(135deg, #f6d365, #fda085);
-  border: 2px solid #fce9bd;
-}
-
-.stone.dragging {
-  opacity: 0.8;
-  transform: translate(-50%, -50%) scale(1.1);
   z-index: 10;
 }
 
-.stone.on-edge {
+/* Stone hover effect to represent magnetic attraction */
+.stone:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+.stone.player-0 {
+  background: linear-gradient(135deg, var(--player1-color), var(--player1-color-dark));
+  border: 2px solid var(--player1-color-light);
+}
+
+.stone.player-1 {
+  background: linear-gradient(135deg, var(--player2-color), var(--player2-color-dark));
+  border: 2px solid var(--player2-color-light);
+}
+
+.stone.dragging {
+  opacity: 0.9;
+  transform: scale(1.05);
+  cursor: grabbing;
+  z-index: 20;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+.stone.flat {
   height: 10px !important;
-  border-bottom-width: 5px;
+}
+
+.stone.edge {
+  height: 20px !important;
+  transform: translateZ(10px) rotateX(70deg);
+}
+
+/* Attraction effect when stones are close */
+.stone.attracting {
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), 
+              box-shadow 0.5s ease, 
+              left 0.2s ease, 
+              top 0.2s ease;
+  box-shadow: 0 0 20px var(--player-color, white);
+  animation: attractionPulse 1.5s infinite alternate;
+}
+
+@keyframes attractionPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 10px var(--player-color, white);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px var(--player-color, white);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 15px var(--player-color, white);
+  }
 }
 
 .stone.clustered {
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.1) 
-    rotate(calc(var(--cluster-angle) + 360deg));
-  animation: cluster-animation 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  pointer-events: none;
+  animation: clusterAnimation 0.8s forwards;
+  z-index: 30;
+  /* Enhanced glow effect to show the magnetic field interaction */
+  box-shadow: 0 0 25px var(--player-color), 0 0 40px var(--player-color), 0 0 60px var(--player-color);
 }
 
-.stone.pre-cluster {
-  animation: pulse 0.6s infinite alternate;
+@keyframes clusterAnimation {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  25% {
+    transform: scale(1.3);
+    opacity: 0.9;
+    box-shadow: 0 0 20px var(--player-color, white), 0 0 40px var(--player-color, white);
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.8;
+    box-shadow: 0 0 25px var(--player-color, white), 0 0 50px var(--player-color, white), 0 0 75px var(--player-color, white);
+  }
+  75% {
+    transform: scale(1.3);
+    opacity: 0.5;
+    box-shadow: 0 0 30px var(--player-color, white), 0 0 60px var(--player-color, white), 0 0 90px var(--player-color, white);
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
 }
 
 .placement-indicator {
@@ -87,17 +263,6 @@
   animation: pulse 1s infinite alternate;
   top: 50%;
   left: 50%;
-}
-
-.magnetic-field {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: visible;
-  top: 0;
-  left: 0;
-  z-index: 1;
 }
 
 .magnetic-indicator {
@@ -117,45 +282,10 @@
   }
 }
 
-@keyframes cluster-animation {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.1) 
-      rotate(calc(var(--cluster-angle) + 360deg));
-  }
-}
-
 @keyframes dash {
   to {
     stroke-dashoffset: -100;
   }
-}
-
-/* Magnetic field visualization - optimized for performance */
-.magnetic-field {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 5;
-  will-change: opacity;
-}
-
-/* Magnetic field background - simplified for better performance */
-.magnetic-field {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 70%);
-  pointer-events: none;
-  will-change: opacity;
 }
 
 /* Performance optimizations for animations */
@@ -169,13 +299,9 @@
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
-  .game-board,
-  .magnetic-field,
-  .stone {
-    transform: translateZ(0);
-    will-change: transform;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
+  .game-board {
+    border-width: 3px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
   }
   
   /* Reduce animation complexity on mobile */

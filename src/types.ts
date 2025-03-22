@@ -1,12 +1,11 @@
 export interface Stone {
-  id: string;
   x: number;
   y: number;
-  radius: number;
-  height: number; // Height of the stone
-  player: Player;
-  clustered: boolean;
-  onEdge: boolean; // Whether the stone is placed on its edge
+  playerId: number;
+  // Properties for magnetic simulation
+  simulatedX?: number;
+  simulatedY?: number;
+  isSimulating?: boolean;
 }
 
 export interface Player {
@@ -18,10 +17,16 @@ export interface Player {
 export interface GameState {
   stones: Stone[];
   players: Player[];
-  currentPlayer: Player;
+  currentPlayerId: number;
   gameOver: boolean;
   winner: Player | null;
-  lastPlacedStoneId: string | null;
+}
+
+export interface MagneticField {
+  x: number;
+  y: number;
+  radius: number;
+  playerId: number;
 }
 
 export interface GameEvent {

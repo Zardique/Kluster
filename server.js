@@ -57,6 +57,74 @@ const gameRooms = new Map();
 const ROOM_CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const ROOM_INACTIVE_THRESHOLD = 2 * 60 * 60 * 1000; // 2 hours
 
+// Constants for magnetic simulation
+const STONE_RADIUS = 25; // Visual radius of the stone
+const MAGNETIC_FIELD_RADIUS = STONE_RADIUS * 2.5; // Magnetic field extends 2.5x beyond stone's visible radius (optimal range from 1.5-3x)
+const PHYSICAL_CONTACT_THRESHOLD = STONE_RADIUS * 2 * 0.9; // Stones cluster when they physically overlap by 10%
+const ATTRACTION_FACTOR = 1.5; // How strongly stones are attracted to each other
+
+// Check if stones form a cluster based on magnetic field physics
+const checkClustering = (stones) => {
+  if (stones.length < 2) return { hasClusters: false, clusters: [] };
+  
+  // Build a graph based on physical contact (not just magnetic field interaction)
+  const graph = {};
+  stones.forEach((stone, i) => {
+    graph[i] = [];
+    stones.forEach((otherStone, j) => {
+      if (i !== j) {
+        const dx = stone.x - otherStone.x;
+        const dy = stone.y - otherStone.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Stones cluster only when they physically touch or overlap
+        if (distance < PHYSICAL_CONTACT_THRESHOLD) {
+          graph[i].push(j);
+        }
+      }
+    });
+  });
+  
+  // Find connected components (clusters) using DFS
+  const visited = new Set();
+  const clusters = [];
+  
+  const dfs = (node, cluster) => {
+    visited.add(node);
+    cluster.push(node);
+    
+    for (const neighbor of graph[node]) {
+      if (!visited.has(neighbor)) {
+        dfs(neighbor, cluster);
+      }
+    }
+  };
+  
+  for (let i = 0; i < stones.length; i++) {
+    if (!visited.has(i)) {
+      const cluster = [];
+      dfs(i, cluster);
+      if (cluster.length >= 2) {
+        clusters.push(cluster);
+      }
+    }
+  }
+  
+  // Create a mapping of magnetic field data for visualization
+  const magneticFields = stones.map(stone => ({
+    x: stone.x,
+    y: stone.y,
+    radius: MAGNETIC_FIELD_RADIUS,
+    playerId: stone.playerId
+  }));
+  
+  return {
+    hasClusters: clusters.length > 0,
+    clusters: clusters.map(cluster => cluster.map(index => stones[index])),
+    magneticFields
+  };
+};
+
 // Set up room cleanup interval
 setInterval(() => {
   const now = Date.now();
@@ -68,6 +136,11 @@ setInterval(() => {
     }
   }
 }, ROOM_CLEANUP_INTERVAL);
+
+// Generate a random room ID
+const generateRoomId = () => {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+};
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -144,8 +217,40 @@ io.on('connection', (socket) => {
       
       room.lastActivity = Date.now();
       
-      // Broadcast the stone placement to all players in the room
+      // Update the game state with the new stone
+      const newStone = { x, y, playerId };
+      room.gameState.stones.push(newStone);
+      
+      // Check for magnetic clustering after adding the new stone
+      const clusterResult = checkClustering(room.gameState.stones);
+      
+      // Broadcast the stone placement to all players
       io.to(roomId).emit('stone_placed', { x, y, playerId });
+      
+      // If clusters formed, handle them
+      if (clusterResult.hasClusters) {
+        // Get all stones that are in clusters
+        const clusteredStones = clusterResult.clusters.flat();
+        
+        // Send clustered stones to clients
+        io.to(roomId).emit('stones_clustered', { 
+          clusteredStones,
+          // Include information about the magnetic fields for visualization
+          magneticFields: clusterResult.magneticFields
+        });
+        
+        console.log(`Cluster occurred in room ${roomId}, ${clusteredStones.length} stones clustered`);
+        
+        // Update the game state by removing clustered stones
+        const clusterStoneIds = new Set(clusteredStones.map(s => `${s.x},${s.y}`));
+        room.gameState.stones = room.gameState.stones.filter(s => !clusterStoneIds.has(`${s.x},${s.y}`));
+        
+        // Add points to current player
+        room.gameState.players[playerId].stonesLeft -= clusteredStones.filter(s => s.playerId === playerId).length;
+        
+        // Update game state after clustering
+        io.to(roomId).emit('game_state_updated', { gameState: room.gameState });
+      }
     } catch (error) {
       console.error('Error placing stone:', error);
     }
@@ -168,29 +273,14 @@ io.on('connection', (socket) => {
     }
   });
   
-  // Handle clustering event
-  socket.on('cluster_occurred', ({ roomId, clusteredStones }) => {
-    try {
-      const room = gameRooms.get(roomId);
-      if (room) {
-        room.lastActivity = Date.now();
-        
-        console.log(`Cluster occurred in room ${roomId}, ${clusteredStones.length} stones clustered`);
-        
-        // Broadcast to all clients EXCEPT the sender
-        socket.to(roomId).emit('stones_clustered', { clusteredStones });
-      }
-    } catch (error) {
-      console.error('Error handling cluster:', error);
-    }
-  });
-  
   // Handle game over
   socket.on('game_over', ({ roomId, winner }) => {
     try {
       const room = gameRooms.get(roomId);
       if (room) {
         room.lastActivity = Date.now();
+        room.gameState.gameOver = true;
+        room.gameState.winner = winner;
         io.to(roomId).emit('game_ended', { winner });
       }
     } catch (error) {
@@ -249,13 +339,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// Generate a random room ID
-function generateRoomId() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
 // Start the server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 }); 
