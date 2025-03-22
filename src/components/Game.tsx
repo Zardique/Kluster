@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import GameBoard3D from './GameBoard3D';
+import GameBoard2D from './GameBoard2D';
 import PlayerInfo from './PlayerInfo';
 import Lobby from './Lobby';
 import { Stone, Player } from '../types';
@@ -10,11 +10,11 @@ import './ModernUI.css';
 // Game constants
 const PLAY_AREA_RADIUS = 250;
 const STONE_RADIUS = 25;
-const STONE_HEIGHT = 8;
+const STONE_HEIGHT = 10;
 const INITIAL_STONES_PER_PLAYER = 12;
 const PLAYER_COLORS = ['#6e8efb', '#f6d365'];
 
-// Create and preload sound effects - moved outside component to avoid recreation
+// Sound effects - moved outside component to avoid recreation
 const createAudio = (path: string) => {
   try {
     const audio = new Audio(path);
@@ -39,14 +39,11 @@ const GAME_SOUNDS = {
   gameOver: createAudio('/sounds/game-over.mp3')
 };
 
-// Check if we're in development mode (Vite sets this)
-const isDevelopment = import.meta.env.DEV;
-
 const Game: React.FC = () => {
   // Device detection for responsive design
   const { isMobile } = useDeviceDetect();
   
-  // Game state - grouped related state
+  // Game state
   const [stones, setStones] = useState<Stone[]>([]);
   const [players, setPlayers] = useState<Player[]>([
     { id: 0, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 1' },
@@ -57,12 +54,12 @@ const Game: React.FC = () => {
   const [winner, setWinner] = useState<number | null>(null);
   const [showLobby, setShowLobby] = useState(true);
   
-  // Optimization: Use refs for values that don't trigger renders
+  // Refs for values that don't trigger renders
   const lastPlacedStoneIdRef = useRef<string | null>(null);
   const processingClusterRef = useRef<boolean>(false);
   const soundsLoaded = useRef<boolean>(false);
   
-  // Get multiplayer context
+  // Multiplayer context
   const {
     socket,
     playerId,
@@ -80,7 +77,6 @@ const Game: React.FC = () => {
   useEffect(() => {
     const loadSounds = async () => {
       try {
-        // Force a load attempt on all sounds
         await Promise.all(Object.values(GAME_SOUNDS).map(sound => {
           if (typeof sound.load === 'function') {
             sound.load();
@@ -94,9 +90,23 @@ const Game: React.FC = () => {
     };
     
     loadSounds();
+    
+    // Clean up sounds on unmount
+    return () => {
+      try {
+        Object.values(GAME_SOUNDS).forEach(sound => {
+          if (typeof sound.pause === 'function') {
+            sound.pause();
+            sound.currentTime = 0;
+          }
+        });
+      } catch (e) {
+        console.error("Failed to clean up sounds:", e);
+      }
+    };
   }, []);
   
-  // Safely play a sound with error handling
+  // Safely play a sound
   const playSound = useCallback((sound: HTMLAudioElement) => {
     try {
       sound.currentTime = 0;
@@ -111,30 +121,7 @@ const Game: React.FC = () => {
     }
   }, []);
   
-  // Check if any player has won (has 0 stones left)
-  const checkGameOver = useCallback((updatedPlayers: Player[]) => {
-    for (let i = 0; i < updatedPlayers.length; i++) {
-      if (updatedPlayers[i].stonesLeft === 0) {
-        setGameOver(true);
-        setWinner(i);
-        
-        // Play game over sound
-        if (soundsLoaded.current) {
-          playSound(GAME_SOUNDS.gameOver);
-        }
-        
-        // Notify other players about the game over
-        if (playerId !== null && isInRoom) {
-          notifyGameOver(i);
-        }
-        
-        return true;
-      }
-    }
-    return false;
-  }, [playerId, isInRoom, notifyGameOver, playSound]);
-  
-  // Listen for stone placement events from the server
+  // Setup multiplayer event listeners
   useEffect(() => {
     if (!socket) return;
     
@@ -143,7 +130,7 @@ const Game: React.FC = () => {
       if (data.playerId !== playerId) {
         handleStonePlace(data.x, data.y, true);
         
-        // Play stone placement sound when the opponent places a stone
+        // Play sound
         if (soundsLoaded.current) {
           playSound(GAME_SOUNDS.placeStone);
         }
@@ -151,8 +138,6 @@ const Game: React.FC = () => {
     };
     
     const onStonesClustered = (data: { clusteredStones: Stone[] }) => {
-      // Only process if we're not already processing a cluster
-      // and if the event wasn't triggered by us
       if (!processingClusterRef.current) {
         const clusterIds = data.clusteredStones.map(stone => stone.id);
         handleCluster(clusterIds, true);
@@ -160,10 +145,7 @@ const Game: React.FC = () => {
     };
     
     const onGameStateUpdated = (data: { gameState: any }) => {
-      // Batch state updates to avoid multiple renders
       const { stones, players, currentPlayer, gameOver, winner } = data.gameState;
-      
-      // Use functional updates to ensure we're working with latest state
       setStones(stones);
       setPlayers(players);
       setCurrentPlayer(currentPlayer);
@@ -172,18 +154,15 @@ const Game: React.FC = () => {
     };
     
     const onGameEnded = (data: { winner: number }) => {
-      // Handle game over
       setGameOver(true);
       setWinner(data.winner);
       
-      // Play game over sound
       if (soundsLoaded.current) {
         playSound(GAME_SOUNDS.gameOver);
       }
     };
     
     const onRematchAccepted = () => {
-      // Reset the game state
       resetGame();
     };
     
@@ -194,7 +173,7 @@ const Game: React.FC = () => {
     socket.on('game_ended', onGameEnded);
     socket.on('rematch_accepted', onRematchAccepted);
     
-    // Clean up event listeners on unmount
+    // Clean up event listeners
     return () => {
       socket.off('stone_placed', onStonePlaced);
       socket.off('stones_clustered', onStonesClustered);
@@ -204,7 +183,7 @@ const Game: React.FC = () => {
     };
   }, [socket, playerId, playSound]);
   
-  // Handle stone placement for 3D board
+  // Handle stone placement
   const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
     // If it's not our turn and not from the server, don't allow placement
     if (!fromServer && playerId !== null && currentPlayer !== playerId) {
@@ -221,25 +200,25 @@ const Game: React.FC = () => {
       height: STONE_HEIGHT,
       player: players[currentPlayer],
       clustered: false,
-      onEdge: Math.random() > 0.5 // 50% chance of being on edge
+      onEdge: false // Simplified for the TAG version
     };
     
-    // Add stone to the board and update state
+    // Add stone to the board
     setStones(prevStones => [...prevStones, newStone]);
     lastPlacedStoneIdRef.current = newStone.id;
     
-    // Play stone placement sound for local placements
+    // Play stone placement sound
     if (!fromServer && soundsLoaded.current) {
       playSound(GAME_SOUNDS.placeStone);
     }
     
-    // Update player stones and switch to next player
+    // Update player stones
     setPlayers(prevPlayers => {
       const newPlayers = prevPlayers.map((player, idx) => {
         if (idx === currentPlayer) {
           return {
             ...player,
-            stonesLeft: Math.max(0, player.stonesLeft - 1) // Ensure we don't go negative
+            stonesLeft: Math.max(0, player.stonesLeft - 1)
           };
         }
         return player;
@@ -248,8 +227,8 @@ const Game: React.FC = () => {
       return newPlayers;
     });
     
-    // Check for game over condition
-    if (players[currentPlayer].stonesLeft <= 1) { // Will be 0 after the update
+    // Check for game over
+    if (players[currentPlayer].stonesLeft <= 1) {
       setTimeout(() => {
         setGameOver(true);
         setWinner(currentPlayer);
@@ -261,76 +240,79 @@ const Game: React.FC = () => {
         if (playerId !== null && isInRoom) {
           notifyGameOver(currentPlayer);
         }
-      }, 300); // Small delay to ensure UI updates properly
+      }, 300);
     } else {
-      // Switch to the next player immediately
+      // Switch to next player
       const nextPlayer = (currentPlayer + 1) % players.length;
       setCurrentPlayer(nextPlayer);
       
-      // If this is multiplayer, update the game state
+      // Update multiplayer state
       if (!fromServer && playerId !== null && isInRoom) {
-        // Get the latest state for server update
-        const nextGameState = {
-          stones: [...stones, newStone],
-          currentPlayer: nextPlayer,
-          players: players.map((player, idx) => {
-            if (idx === currentPlayer) {
-              return {
-                ...player,
-                stonesLeft: player.stonesLeft - 1
-              };
-            }
-            return player;
-          }),
-          gameOver: players[currentPlayer].stonesLeft <= 1,
-          winner: players[currentPlayer].stonesLeft <= 1 ? currentPlayer : null
-        };
-        
-        // Emit the stone placement and update game state
+        // Send stone placement event
         emitPlaceStone(x, y);
-        setTimeout(() => updateGameState(nextGameState), 50);
+        
+        // Update game state
+        setTimeout(() => {
+          const gameState = {
+            stones: [...stones, newStone],
+            players: players.map((player, idx) => {
+              if (idx === currentPlayer) {
+                return {
+                  ...player,
+                  stonesLeft: player.stonesLeft - 1
+                };
+              }
+              return player;
+            }),
+            currentPlayer: nextPlayer,
+            gameOver: players[currentPlayer].stonesLeft <= 1,
+            winner: players[currentPlayer].stonesLeft <= 1 ? currentPlayer : null
+          };
+          
+          updateGameState(gameState);
+        }, 50);
       }
     }
   }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, 
-      updateGameState, notifyGameOver, playSound, soundsLoaded]);
+      updateGameState, notifyGameOver, playSound]);
   
-  // Handle clustered stones for 3D board
+  // Handle clustered stones
   const handleCluster = useCallback((clusteredStoneIds: string[], fromServer = false) => {
     if (clusteredStoneIds.length === 0) return;
     
-    // Set processing flag to prevent duplicate processing
+    // Prevent duplicate processing
     processingClusterRef.current = true;
     
-    // Find the clustered stones objects from IDs
+    // Find the clustered stones
     const clusteredStones = stones.filter(stone => 
       clusteredStoneIds.includes(stone.id)
     );
     
-    // Find the player who placed the last stone (previous player)
+    // Last player who placed a stone
     const lastPlayerIndex = currentPlayer === 0 ? 1 : 0;
     
-    // Create a set of IDs for faster lookups
+    // Create a set for faster lookups
     const clusteredStoneIdsSet = new Set(clusteredStoneIds);
     
     // Update the stones list - remove clustered stones
     setStones(prevStones => {
       const updatedStones = prevStones.filter(stone => !clusteredStoneIdsSet.has(stone.id));
       
-      // Update player stones - give clustered stones to the last player
+      // Update player stones
       setPlayers(prevPlayers => {
         const updatedPlayers = [...prevPlayers];
         
-        // Add the clustered stones count to the player who placed the last stone
+        // Add clustered stones to the last player
         updatedPlayers[lastPlayerIndex] = {
           ...updatedPlayers[lastPlayerIndex],
           stonesLeft: updatedPlayers[lastPlayerIndex].stonesLeft + clusteredStones.length
         };
         
-        // Notify other players about the clustering if this is a local event
+        // Notify multiplayer
         if (playerId !== null && isInRoom && !fromServer) {
           notifyCluster(clusteredStones);
           
-          // Update the game state on the server
+          // Update game state
           updateGameState({
             stones: updatedStones,
             players: updatedPlayers,
@@ -340,7 +322,7 @@ const Game: React.FC = () => {
           });
         }
         
-        // After updating players, check if anyone has 0 stones left
+        // Check for game over
         setTimeout(() => {
           const playerWithNoStones = updatedPlayers.findIndex(p => p.stonesLeft === 0);
           if (playerWithNoStones !== -1) {
@@ -363,35 +345,15 @@ const Game: React.FC = () => {
       return updatedStones;
     });
     
-    // Reset processing flag after the animation duration
+    // Reset processing flag
     setTimeout(() => {
       processingClusterRef.current = false;
-    }, 700); // Slightly longer than animation duration for safety
+    }, 700);
   }, [currentPlayer, playerId, isInRoom, notifyCluster, updateGameState, 
       gameOver, winner, playSound, soundsLoaded, stones]);
   
-  // Update stone positions based on 3D board physics
-  const updateStonePositions = useCallback((updates: { id: string; x: number; y: number }[]) => {
-    setStones(prevStones => {
-      // Create a map for faster lookups
-      const updatesMap = new Map(
-        updates.map(update => [update.id, { x: update.x, y: update.y }])
-      );
-      
-      // Update stones with new positions
-      return prevStones.map(stone => {
-        const update = updatesMap.get(stone.id);
-        if (update) {
-          return { ...stone, x: update.x, y: update.y };
-        }
-        return stone;
-      });
-    });
-  }, []);
-  
   // Reset game state
   const resetGame = useCallback(() => {
-    // Batch all state updates together for better performance
     setStones([]);
     setPlayers([
       { id: 0, stonesLeft: INITIAL_STONES_PER_PLAYER, name: 'Player 1' },
@@ -403,45 +365,29 @@ const Game: React.FC = () => {
     lastPlacedStoneIdRef.current = null;
     processingClusterRef.current = false;
     
-    // Request a rematch if in multiplayer mode
+    // Request rematch if in multiplayer
     if (playerId !== null && isInRoom) {
       requestRematch();
     }
   }, [playerId, isInRoom, requestRematch]);
   
-  // Handle starting the game from the lobby
+  // Handle starting the game from lobby
   const handleStartGame = useCallback(() => {
     setShowLobby(false);
   }, []);
-
-  // Clean up sounds on component unmount
-  useEffect(() => {
-    return () => {
-      try {
-        Object.values(GAME_SOUNDS).forEach(sound => {
-          if (typeof sound.pause === 'function') {
-            sound.pause();
-            sound.currentTime = 0;
-          }
-        });
-      } catch (e) {
-        console.error("Failed to clean up sounds:", e);
-      }
-    };
-  }, []);
   
-  // Memoize values to avoid unnecessary re-renders
+  // Memoize values for performance
   const isMyTurn = useMemo(() => 
     playerId === null || playerId === currentPlayer, 
     [playerId, currentPlayer]
   );
   
-  // For debugging - check whose turn it is
+  // Debug logging
   useEffect(() => {
     console.log("Current player:", currentPlayer, "My Player ID:", playerId, "Is my turn:", isMyTurn);
   }, [currentPlayer, playerId, isMyTurn]);
   
-  // Adjust game content layout based on device
+  // Adjust layout based on device
   const gameContentClass = useMemo(() => 
     isMobile ? "game-content game-content-mobile" : "game-content", 
     [isMobile]
@@ -459,10 +405,10 @@ const Game: React.FC = () => {
         <Lobby onStartGame={handleStartGame} />
       )}
       
-      {/* Only show game content when not in lobby or game has started */}
+      {/* Game content */}
       {(!showLobby || isGameStarted) && (
         <div className={gameContentClass}>
-          {/* Game board on the left (or top on mobile) */}
+          {/* Game board */}
           <div className="board-wrapper">
             <div 
               className="board-glow" 
@@ -472,24 +418,22 @@ const Game: React.FC = () => {
                   : 'rgba(246, 211, 101, 0.3)' 
               }}
             ></div>
-            <GameBoard3D
+            <GameBoard2D
               stones={stones}
               playAreaRadius={isMobile ? PLAY_AREA_RADIUS * 0.8 : PLAY_AREA_RADIUS}
               onStonePlace={handleStonePlace}
               onCluster={handleCluster}
-              updateStonePositions={updateStonePositions}
               currentPlayer={players[currentPlayer]}
               gameOver={gameOver}
-              placementMode="flat"
               isMobile={isMobile}
             />
           </div>
           
-          {/* Controls and info on the right (or bottom on mobile) */}
+          {/* Player info */}
           <PlayerInfo
             players={players}
             currentPlayer={currentPlayer}
-            gameOver={false} // Always false since we're using the popup now
+            gameOver={false}
             winner={null}
             onReset={resetGame}
             myPlayerId={playerId}
@@ -498,7 +442,7 @@ const Game: React.FC = () => {
         </div>
       )}
       
-      {/* Game over popup overlay */}
+      {/* Game over popup */}
       {gameOver && (
         <div className="game-over-overlay">
           <div className={isMobile ? "game-over-popup mobile-popup" : "game-over-popup"}>

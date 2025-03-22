@@ -1,0 +1,126 @@
+.game-board-2d {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  margin: 0 auto;
+  touch-action: none;
+  user-select: none;
+  transition: transform 0.2s ease;
+  background-color: #f9f9f9;
+}
+
+.game-board-2d:hover {
+  transform: scale(1.01);
+}
+
+/* The board boundary - just a single circle */
+.board-boundary {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 3px solid #FF8C00;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Background subtle pattern */
+.board-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(circle, #f9f9f9 0%, #f0f0f0 100%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Individual stones */
+.stone {
+  position: absolute;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center center;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.stone:hover {
+  transform: scale(1.05);
+}
+
+/* Player specific stone styles */
+.stone.player-0 {
+  background-color: #3498db;
+  background-image: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+}
+
+.stone.player-1 {
+  background-color: #e74c3c;
+  background-image: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+}
+
+/* Ghost stone during dragging */
+.stone.ghost-stone {
+  z-index: 10;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Ghost stone states */
+.stone.ghost-stone.valid-placement {
+  opacity: 0.6;
+  box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+  border: 2px solid rgba(46, 204, 113, 0.8);
+}
+
+.stone.ghost-stone.invalid-placement {
+  opacity: 0.3;
+  box-shadow: 0 0 15px rgba(231, 76, 60, 0.5);
+  border: 2px solid rgba(231, 76, 60, 0.8);
+}
+
+/* Glow effect for stones */
+.stone-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.player-0 .stone-glow {
+  box-shadow: 0 0 15px 5px rgba(52, 152, 219, 0.5);
+}
+
+.player-1 .stone-glow {
+  box-shadow: 0 0 15px 5px rgba(231, 76, 60, 0.5);
+}
+
+/* Animation for clustering */
+@keyframes cluster-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(0.1); opacity: 0; }
+}
+
+.clustering {
+  animation: cluster-pulse 0.5s ease-out forwards;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .game-board-2d {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  }
+  
+  .stone {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+} 
