@@ -327,6 +327,68 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
     setDragPosition(null);
   };
   
+  // Touch event handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (gameOver) return;
+    
+    // Prevent scrolling when interacting with the game board
+    e.preventDefault();
+    
+    // Get the position relative to the board
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect || !e.touches[0]) return;
+    
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+    
+    // Start dragging
+    setIsDragging(true);
+    setDragPosition({ x, y });
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDragging || gameOver) return;
+    
+    // Prevent scrolling when interacting with the game board
+    e.preventDefault();
+    
+    // Get the position relative to the board
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect || !e.touches[0]) return;
+    
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+    
+    // Update drag position
+    setDragPosition({ x, y });
+  };
+  
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDragging || gameOver) return;
+    
+    // Get the last touch position
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect || !dragPosition) return;
+    
+    const { x, y } = dragPosition;
+    
+    // Check if the position is within the play area
+    const centerX = playAreaRadius;
+    const centerY = playAreaRadius;
+    const distanceFromCenter = Math.sqrt(
+      Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
+    );
+    
+    if (distanceFromCenter + STONE_RADIUS <= playAreaRadius) {
+      // Place the stone
+      onStonePlace(x, y);
+    }
+    
+    // Reset dragging state
+    setIsDragging(false);
+    setDragPosition(null);
+  };
+  
   // Get the actual positions to render
   const getRenderPosition = (stone: Stone) => {
     const pos = stonePositions.get(stone.id);
@@ -409,11 +471,11 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
           ];
           
           // Determine stone color based on player
-          const color = stone.player.id === currentPlayer.id ? new THREE.Color(0x3498db) : new THREE.Color(0xe74c3c);
+          const color = stone.player.id === 0 ? new THREE.Color(0x3498db) : new THREE.Color(0xe74c3c);
           
           // Add glow effect for magnetic strength
           const glowIntensity = magneticStrength * 0.5;
-          const emissiveColor = stone.player.id === currentPlayer.id ? new THREE.Color(0x3498db).multiplyScalar(glowIntensity) : new THREE.Color(0xe74c3c).multiplyScalar(glowIntensity);
+          const emissiveColor = stone.player.id === 0 ? new THREE.Color(0x3498db).multiplyScalar(glowIntensity) : new THREE.Color(0xe74c3c).multiplyScalar(glowIntensity);
           
           return (
             <group key={stone.id}>
@@ -441,7 +503,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
               >
                 <sphereGeometry args={[STONE_RADIUS * 1.1, 16, 16]} />
                 <meshBasicMaterial 
-                  color={stone.player.id === currentPlayer.id ? 0x3498db : 0xe74c3c} 
+                  color={stone.player.id === 0 ? 0x3498db : 0xe74c3c} 
                   transparent={true} 
                   opacity={0.1} 
                   side={THREE.BackSide}
@@ -463,7 +525,7 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
           >
             <cylinderGeometry args={[STONE_RADIUS, STONE_RADIUS, STONE_HEIGHT, STONE_SEGMENTS]} />
             <meshStandardMaterial 
-              color={currentPlayer.id === currentPlayer.id ? 0x3498db : 0xe74c3c}
+              color={currentPlayer.id === 0 ? 0x3498db : 0xe74c3c}
               transparent={true}
               opacity={0.5}
             />
@@ -487,6 +549,9 @@ const GameBoard3D: React.FC<GameBoardProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         width: `${playAreaRadius * 2}px`,
         height: `${playAreaRadius * 2}px`,

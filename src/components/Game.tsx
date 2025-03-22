@@ -208,6 +208,7 @@ const Game: React.FC = () => {
   const handleStonePlace = useCallback((x: number, y: number, fromServer = false) => {
     // If it's not our turn and not from the server, don't allow placement
     if (!fromServer && playerId !== null && currentPlayer !== playerId) {
+      console.log("Not your turn", playerId, currentPlayer);
       return;
     }
     
@@ -232,7 +233,7 @@ const Game: React.FC = () => {
       playSound(GAME_SOUNDS.placeStone);
     }
     
-    // Update player stones and check for win
+    // Update player stones and switch to next player
     setPlayers(prevPlayers => {
       const newPlayers = prevPlayers.map((player, idx) => {
         if (idx === currentPlayer) {
@@ -244,44 +245,34 @@ const Game: React.FC = () => {
         return player;
       });
       
-      // Check if the current player has placed all their stones
-      const isGameOver = newPlayers[currentPlayer].stonesLeft === 0;
-      
-      // If game is over, handle it
-      if (isGameOver) {
-        setTimeout(() => {
-          setGameOver(true);
-          setWinner(currentPlayer);
-          
-          if (soundsLoaded.current) {
-            playSound(GAME_SOUNDS.gameOver);
-          }
-          
-          if (playerId !== null && isInRoom) {
-            notifyGameOver(currentPlayer);
-          }
-        }, 300); // Small delay to ensure UI updates properly
-      } else {
-        // Switch to the next player with a small delay to ensure state updates
-        setTimeout(() => {
-          setCurrentPlayer(current => (current + 1) % players.length);
-        }, 100);
-      }
-      
       return newPlayers;
     });
     
-    // If this is our move, emit it to the server
-    if (!fromServer && playerId !== null && isInRoom) {
-      // Emit the stone placement event
-      emitPlaceStone(x, y);
-      
-      // Update the game state on the server (after our local state has updated)
+    // Check for game over condition
+    if (players[currentPlayer].stonesLeft <= 1) { // Will be 0 after the update
       setTimeout(() => {
-        // Get the latest state
-        const serverGameState = {
+        setGameOver(true);
+        setWinner(currentPlayer);
+        
+        if (soundsLoaded.current) {
+          playSound(GAME_SOUNDS.gameOver);
+        }
+        
+        if (playerId !== null && isInRoom) {
+          notifyGameOver(currentPlayer);
+        }
+      }, 300); // Small delay to ensure UI updates properly
+    } else {
+      // Switch to the next player immediately
+      const nextPlayer = (currentPlayer + 1) % players.length;
+      setCurrentPlayer(nextPlayer);
+      
+      // If this is multiplayer, update the game state
+      if (!fromServer && playerId !== null && isInRoom) {
+        // Get the latest state for server update
+        const nextGameState = {
           stones: [...stones, newStone],
-          currentPlayer: (currentPlayer + 1) % players.length,
+          currentPlayer: nextPlayer,
           players: players.map((player, idx) => {
             if (idx === currentPlayer) {
               return {
@@ -291,12 +282,14 @@ const Game: React.FC = () => {
             }
             return player;
           }),
-          gameOver: players[currentPlayer].stonesLeft === 1, // Will be 0 after this move
-          winner: players[currentPlayer].stonesLeft === 1 ? currentPlayer : null
+          gameOver: players[currentPlayer].stonesLeft <= 1,
+          winner: players[currentPlayer].stonesLeft <= 1 ? currentPlayer : null
         };
         
-        updateGameState(serverGameState);
-      }, 50);
+        // Emit the stone placement and update game state
+        emitPlaceStone(x, y);
+        setTimeout(() => updateGameState(nextGameState), 50);
+      }
     }
   }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, 
       updateGameState, notifyGameOver, playSound, soundsLoaded]);
@@ -442,6 +435,11 @@ const Game: React.FC = () => {
     playerId === null || playerId === currentPlayer, 
     [playerId, currentPlayer]
   );
+  
+  // For debugging - check whose turn it is
+  useEffect(() => {
+    console.log("Current player:", currentPlayer, "My Player ID:", playerId, "Is my turn:", isMyTurn);
+  }, [currentPlayer, playerId, isMyTurn]);
   
   // Adjust game content layout based on device
   const gameContentClass = useMemo(() => 
