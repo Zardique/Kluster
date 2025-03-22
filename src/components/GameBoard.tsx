@@ -53,7 +53,7 @@ interface GameBoardProps {
   isMyTurn?: boolean;
 }
 
-// Split stone rendering into a dedicated component for better control
+// Stone component with simplified positioning - removed unnecessary transforms
 const StoneComponent: React.FC<{
   stone: Stone;
   isClusteredStone: boolean;
@@ -67,9 +67,10 @@ const StoneComponent: React.FC<{
     isNearCluster ? 'pre-cluster' : ''
   }`;
 
+  // Simple absolute positioning using pixel coordinates
   const stoneStyle: React.CSSProperties = {
-    left: `calc(50% + ${stone.x}px)`,
-    top: `calc(50% + ${stone.y}px)`,
+    left: `${stone.x}px`,
+    top: `${stone.y}px`,
     width: `${STONE_RADIUS * 2}px`,
     height: `${STONE_RADIUS * 2}px`
   };
@@ -429,116 +430,130 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     };
   }, []);
 
-  // Handle mouse events - simplified and more reliable
+  // Convert page coordinates to game board coordinates
+  const getGameBoardCoordinates = useCallback((clientX: number, clientY: number): {x: number, y: number} | null => {
+    if (!boardRef.current) return null;
+    
+    const rect = boardRef.current.getBoundingClientRect();
+    
+    // Get coordinates relative to the center of the board
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    
+    // Calculate position relative to center
+    const boardX = clientX - centerX + PLAY_AREA_RADIUS;
+    const boardY = clientY - centerY + PLAY_AREA_RADIUS;
+    
+    // Check if within play area
+    const distanceFromCenter = Math.sqrt(
+      Math.pow(clientX - centerX, 2) + 
+      Math.pow(clientY - centerY, 2)
+    );
+    
+    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
+      return { x: boardX, y: boardY };
+    }
+    
+    return null;
+  }, []);
+
+  // Handle mouse down - start stone dragging
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     // Only allow stone placement if it's the player's turn
-    if (!isMyTurn || isAnimating || !boardRef.current) return;
+    if (!isMyTurn || isAnimating) return;
     
-    const rect = boardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    
-    // Check if within play area using squared distance for performance
-    const distanceSquared = x * x + y * y;
-    const maxDistanceSquared = Math.pow(PLAY_AREA_RADIUS - STONE_RADIUS, 2);
-    
-    if (distanceSquared <= maxDistanceSquared) {
-      e.preventDefault(); // Prevent default to ensure we capture all events
-      setDraggingStone({ x, y });
-      setShowPlacementIndicator(true);
-      setIndicatorPos({ x, y });
-    }
-  }, [isMyTurn, isAnimating]);
-
-  // Touch event handlers for mobile support
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isMyTurn || isAnimating || !boardRef.current) return;
-    
-    const rect = boardRef.current.getBoundingClientRect();
-    const touch = e.touches[0];
-    const x = touch.clientX - rect.left - rect.width / 2;
-    const y = touch.clientY - rect.top - rect.height / 2;
-    
-    // Check if within play area
-    const distanceFromCenter = Math.sqrt(x * x + y * y);
-    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
-      setDraggingStone({ x, y });
-      setShowPlacementIndicator(true);
-      setIndicatorPos({ x, y });
-      
-      // Prevent scrolling when interacting with the game board
+    const position = getGameBoardCoordinates(e.clientX, e.clientY);
+    if (position) {
       e.preventDefault();
+      setDraggingStone(position);
+      setShowPlacementIndicator(true);
+      setIndicatorPos(position);
     }
-  }, [isMyTurn, isAnimating]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!draggingStone || !boardRef.current) return;
-    
-    const rect = boardRef.current.getBoundingClientRect();
-    const touch = e.touches[0];
-    const x = touch.clientX - rect.left - rect.width / 2;
-    const y = touch.clientY - rect.top - rect.height / 2;
-    
-    // Check if within play area
-    const distanceFromCenter = Math.sqrt(x * x + y * y);
-    if (distanceFromCenter <= PLAY_AREA_RADIUS - STONE_RADIUS) {
-      setDraggingStone({ x, y });
-      setIndicatorPos({ x, y });
-    }
-    
-    // Prevent scrolling when dragging
-    e.preventDefault();
-  }, [draggingStone]);
-
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+  }, [isMyTurn, isAnimating, getGameBoardCoordinates]);
+  
+  // Handle mouse move - update dragging stone position
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingStone) return;
     
-    onStonePlaced(draggingStone.x, draggingStone.y);
-    setDraggingStone(null);
-    setShowPlacementIndicator(false);
-    
-    // Play stone placement sound
-    playSound(SOUNDS.placeStone);
-  }, [draggingStone, onStonePlaced, playSound]);
-
-  // Handle stone placement on mouse up
+    const position = getGameBoardCoordinates(e.clientX, e.clientY);
+    if (position) {
+      setDraggingStone(position);
+      setShowPlacementIndicator(true);
+      setIndicatorPos(position);
+    } else {
+      setShowPlacementIndicator(false);
+    }
+  }, [draggingStone, getGameBoardCoordinates]);
+  
+  // Handle mouse up - place stone
   const handleMouseUp = useCallback(() => {
     if (!draggingStone) return;
     
     // Create a stable copy of the coordinates
-    const stonePosition = { x: draggingStone.x, y: draggingStone.y };
+    const stonePosition = { ...draggingStone };
     
     // Reset UI state first
     setDraggingStone(null);
     setShowPlacementIndicator(false);
     
-    // Then place the stone with a short delay to ensure UI resets
-    setTimeout(() => {
-      onStonePlaced(stonePosition.x, stonePosition.y);
-      playSound(SOUNDS.placeStone);
-    }, 10);
+    // Then place the stone
+    onStonePlaced(stonePosition.x, stonePosition.y);
+    playSound(SOUNDS.placeStone);
   }, [draggingStone, onStonePlaced, playSound]);
-
-  // Improved mouse move handler
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingStone || !boardRef.current) return;
+  
+  // Handle mouse leave - cancel stone placement
+  const handleMouseLeave = useCallback(() => {
+    setDraggingStone(null);
+    setShowPlacementIndicator(false);
+  }, []);
+  
+  // Handle touch start - start stone dragging on mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isMyTurn || isAnimating) return;
     
-    const rect = boardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
+    const touch = e.touches[0];
+    const position = getGameBoardCoordinates(touch.clientX, touch.clientY);
     
-    // Check if within play area using squared distance for performance
-    const distanceSquared = x * x + y * y;
-    const maxDistanceSquared = Math.pow(PLAY_AREA_RADIUS - STONE_RADIUS, 2);
-    
-    if (distanceSquared <= maxDistanceSquared) {
-      setDraggingStone({ x, y });
+    if (position) {
+      e.preventDefault();
+      setDraggingStone(position);
       setShowPlacementIndicator(true);
-      setIndicatorPos({ x, y });
+      setIndicatorPos(position);
+    }
+  }, [isMyTurn, isAnimating, getGameBoardCoordinates]);
+  
+  // Handle touch move - update dragging stone position on mobile
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!draggingStone) return;
+    
+    const touch = e.touches[0];
+    const position = getGameBoardCoordinates(touch.clientX, touch.clientY);
+    
+    if (position) {
+      e.preventDefault();
+      setDraggingStone(position);
+      setShowPlacementIndicator(true);
+      setIndicatorPos(position);
     } else {
       setShowPlacementIndicator(false);
     }
-  }, [draggingStone]);
+  }, [draggingStone, getGameBoardCoordinates]);
+  
+  // Handle touch end - place stone on mobile
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!draggingStone) return;
+    
+    // Create a stable copy of the coordinates
+    const stonePosition = { ...draggingStone };
+    
+    // Reset UI state first
+    setDraggingStone(null);
+    setShowPlacementIndicator(false);
+    
+    // Then place the stone
+    onStonePlaced(stonePosition.x, stonePosition.y);
+    playSound(SOUNDS.placeStone);
+  }, [draggingStone, onStonePlaced, playSound]);
 
   // Calculate angle for clustering animation
   const getClusterAngle = useCallback((stone: Stone): number => {
@@ -558,12 +573,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
   }), [isMyTurn, isAnimating, currentPlayer.id]);
 
-  const playAreaStyle = useMemo(() => ({
-    width: `${PLAY_AREA_RADIUS * 2}px`,
-    height: `${PLAY_AREA_RADIUS * 2}px`
-  }), []);
-
-  // Render the stones list - using the dedicated Stone component
+  // Render the stones list with correct positioning
   const StonesList = useMemo(() => {
     return stones.map(stone => (
       <StoneComponent 
@@ -576,7 +586,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     ));
   }, [stones, clusteredStones, nearClusterStones, getClusterAngle]);
 
-  // Dragging stone preview - more reliable rendering
+  // Dragging stone preview with consistent positioning
   const DraggingStonePreview = useMemo(() => {
     if (!draggingStone) return null;
     
@@ -584,8 +594,8 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div
         className={`stone player-${currentPlayer.id === 0 ? 1 : 2} dragging ${placementMode === 'edge' ? 'on-edge' : ''}`}
         style={{
-          left: `calc(50% + ${draggingStone.x}px)`,
-          top: `calc(50% + ${draggingStone.y}px)`,
+          left: `${draggingStone.x}px`,
+          top: `${draggingStone.y}px`,
           width: `${STONE_RADIUS * 2}px`,
           height: `${STONE_RADIUS * 2}px`
         }}
@@ -593,7 +603,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
     );
   }, [draggingStone, currentPlayer.id, placementMode]);
 
-  // Optimize placement indicator rendering
+  // Placement indicator with consistent positioning
   const PlacementIndicator = useMemo(() => {
     if (!showPlacementIndicator) return null;
     
@@ -601,15 +611,24 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       <div 
         className="placement-indicator" 
         style={{
-          left: `calc(50% + ${indicatorPos.x}px)`,
-          top: `calc(50% + ${indicatorPos.y}px)`,
+          left: `${indicatorPos.x}px`,
+          top: `${indicatorPos.y}px`,
           width: `${STONE_RADIUS * 2}px`,
           height: `${STONE_RADIUS * 2}px`,
           borderColor: PLAYER_COLORS[currentPlayer.id === 0 ? 0 : 1]
         }}
       />
     );
-  }, [showPlacementIndicator, indicatorPos.x, indicatorPos.y, currentPlayer.id]);
+  }, [showPlacementIndicator, indicatorPos, currentPlayer.id]);
+
+  // Position the play area properly in the center of the board
+  const playAreaStyle = useMemo(() => ({
+    width: `${PLAY_AREA_RADIUS * 2}px`,
+    height: `${PLAY_AREA_RADIUS * 2}px`,
+    position: 'absolute' as const,
+    top: 0,
+    left: 0
+  }), []);
 
   // Optimize magnetic field lines rendering
   const MagneticField = useMemo(() => {
@@ -643,7 +662,7 @@ const GameBoard: React.FC<GameBoardProps> = React.memo(({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
