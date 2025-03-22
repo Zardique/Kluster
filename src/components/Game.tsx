@@ -13,6 +13,8 @@ const STONE_RADIUS = 25;
 const STONE_HEIGHT = 10;
 const INITIAL_STONES_PER_PLAYER = 12;
 const PLAYER_COLORS = ['#6e8efb', '#f6d365'];
+const POINTS_PER_CLUSTER = 10;
+const POINTS_TO_WIN = 100;
 
 // Sound effects - moved outside component to avoid recreation
 const createAudio = (path: string) => {
@@ -140,7 +142,7 @@ const Game: React.FC = () => {
     const onStonesClustered = (data: { clusteredStones: Stone[] }) => {
       if (!processingClusterRef.current) {
         const clusterIds = data.clusteredStones.map(stone => stone.id);
-        handleCluster(clusterIds, true);
+        handleCluster(clusterIds);
       }
     };
     
@@ -276,81 +278,109 @@ const Game: React.FC = () => {
   }, [currentPlayer, players, stones, playerId, isInRoom, emitPlaceStone, 
       updateGameState, notifyGameOver, playSound]);
   
+  // Add a function to check game over conditions
+  const checkGameOverConditions = useCallback(() => {
+    // Check if any player has no stones left
+    const playerWithNoStones = players.findIndex(p => p.stonesLeft === 0);
+    if (playerWithNoStones !== -1) {
+      setGameOver(true);
+      setWinner(playerWithNoStones);
+      
+      if (soundsLoaded.current) {
+        playSound(GAME_SOUNDS.gameOver);
+      }
+      
+      if (playerId !== null && isInRoom) {
+        notifyGameOver(playerWithNoStones);
+      }
+    }
+  }, [players, setGameOver, setWinner, playerId, isInRoom, notifyGameOver, playSound, soundsLoaded]);
+  
   // Handle clustered stones
-  const handleCluster = useCallback((clusteredStoneIds: string[], fromServer = false) => {
-    if (clusteredStoneIds.length === 0) return;
+  const handleCluster = useCallback((clusteredStoneIds: string[]) => {
+    if (!clusteredStoneIds || clusteredStoneIds.length < 2) return;
     
-    // Prevent duplicate processing
-    processingClusterRef.current = true;
+    console.log('Handling cluster for stones:', clusteredStoneIds);
     
-    // Find the clustered stones
-    const clusteredStones = stones.filter(stone => 
-      clusteredStoneIds.includes(stone.id)
-    );
+    // Find the clustered stones by their ids
+    const clusteredStones = stones.filter(stone => clusteredStoneIds.includes(stone.id));
     
-    // Last player who placed a stone
-    const lastPlayerIndex = currentPlayer === 0 ? 1 : 0;
+    if (clusteredStones.length < 2) {
+      console.warn('Not enough stones found for clustering');
+      return;
+    }
     
-    // Create a set for faster lookups
-    const clusteredStoneIdsSet = new Set(clusteredStoneIds);
+    // Get the player who owns these stones
+    const stonePlayer = clusteredStones[0].player;
     
-    // Update the stones list - remove clustered stones
+    // Ensure all stones belong to the same player
+    const samePlayer = clusteredStones.every(stone => stone.player.id === stonePlayer.id);
+    if (!samePlayer) {
+      console.warn('Clustering stones belong to different players');
+      return;
+    }
+    
+    // Calculate the new center of the cluster
+    const centerX = clusteredStones.reduce((sum, stone) => sum + stone.x, 0) / clusteredStones.length;
+    const centerY = clusteredStones.reduce((sum, stone) => sum + stone.y, 0) / clusteredStones.length;
+    
+    // Create a new stone at the center
+    const newStone: Stone = {
+      id: `stone_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      x: centerX,
+      y: centerY,
+      radius: STONE_RADIUS,
+      height: STONE_HEIGHT,
+      player: stonePlayer,
+      clustered: false,
+      onEdge: false // Simplified for this version
+    };
+    
+    // Remove the clustered stones and add the new one
     setStones(prevStones => {
-      const updatedStones = prevStones.filter(stone => !clusteredStoneIdsSet.has(stone.id));
+      const remainingStones = prevStones.filter(stone => !clusteredStoneIds.includes(stone.id));
+      // Play cluster sound effect
+      playSound(GAME_SOUNDS.placeStone);
       
-      // Update player stones
-      setPlayers(prevPlayers => {
-        const updatedPlayers = [...prevPlayers];
-        
-        // Add clustered stones to the last player
-        updatedPlayers[lastPlayerIndex] = {
-          ...updatedPlayers[lastPlayerIndex],
-          stonesLeft: updatedPlayers[lastPlayerIndex].stonesLeft + clusteredStones.length
-        };
-        
-        // Notify multiplayer
-        if (playerId !== null && isInRoom && !fromServer) {
+      // Notify the multiplayer context if available
+      if (notifyCluster) {
+        // Check the expected parameter type for notifyCluster and adjust accordingly
+        if (typeof notifyCluster === 'function') {
           notifyCluster(clusteredStones);
-          
-          // Update game state
-          updateGameState({
-            stones: updatedStones,
-            players: updatedPlayers,
-            currentPlayer,
-            gameOver,
-            winner
-          });
         }
-        
-        // Check for game over
-        setTimeout(() => {
-          const playerWithNoStones = updatedPlayers.findIndex(p => p.stonesLeft === 0);
-          if (playerWithNoStones !== -1) {
-            setGameOver(true);
-            setWinner(playerWithNoStones);
-            
-            if (soundsLoaded.current) {
-              playSound(GAME_SOUNDS.gameOver);
-            }
-            
-            if (playerId !== null && isInRoom) {
-              notifyGameOver(playerWithNoStones);
-            }
-          }
-        }, 100);
-        
-        return updatedPlayers;
-      });
+      }
       
-      return updatedStones;
+      return [...remainingStones, newStone];
     });
     
-    // Reset processing flag
-    setTimeout(() => {
-      processingClusterRef.current = false;
-    }, 700);
-  }, [currentPlayer, playerId, isInRoom, notifyCluster, updateGameState, 
-      gameOver, winner, playSound, soundsLoaded, stones]);
+    // Check if player has score property before updating
+    const playerHasScoreProperty = players.length > 0 && 'score' in players[0];
+    
+    if (playerHasScoreProperty) {
+      // Calculate points for the clustering
+      const pointsEarned = clusteredStones.length * POINTS_PER_CLUSTER;
+      
+      // Update player score
+      setPlayers(prevPlayers => 
+        prevPlayers.map(player => 
+          player.id === stonePlayer.id
+            ? { ...player, score: (player as any).score + pointsEarned }
+            : player
+        )
+      );
+      
+      // Check for game over conditions based on score
+      const updatedPlayerScore = (players.find(p => p.id === stonePlayer.id) as any)?.score ?? 0;
+      if (updatedPlayerScore + pointsEarned >= POINTS_TO_WIN) {
+        setGameOver(true);
+        setWinner(stonePlayer.id);
+      }
+    } else {
+      // Handle game over based on remaining stones or other logic
+      // This is the fallback for Player types without a score property
+      checkGameOverConditions();
+    }
+  }, [stones, players, setStones, setPlayers, notifyCluster, playSound, checkGameOverConditions]);
   
   // Reset game state
   const resetGame = useCallback(() => {

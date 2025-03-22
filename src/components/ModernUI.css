@@ -1006,4 +1006,211 @@
   0% { transform: translateY(0px); }
   50% { transform: translateY(-10px); }
   100% { transform: translateY(0px); }
+}
+
+/* Enhanced Game Board Styles */
+.game-board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  position: relative;
+}
+
+.game-board-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.game-board-2d {
+  position: relative;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  box-shadow: 
+    0 0 30px rgba(0, 0, 0, 0.3),
+    inset 0 0 20px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  transition: all 0.3s ease, box-shadow 0.5s ease;
+}
+
+.game-board-2d:hover {
+  transform: scale(1.01);
+  box-shadow: 
+    0 0 40px rgba(0, 0, 0, 0.4),
+    inset 0 0 30px rgba(255, 255, 255, 0.15);
+}
+
+.board-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: 
+    radial-gradient(circle at center, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%),
+    linear-gradient(135deg, rgba(79, 70, 229, 0.2) 0%, rgba(245, 208, 254, 0.1) 100%);
+  z-index: -1;
+}
+
+.board-boundary {
+  position: absolute;
+  top: 2%;
+  left: 2%;
+  width: 96%;
+  height: 96%;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.3);
+  box-shadow: 0 0 15px rgba(148, 163, 184, 0.2);
+  pointer-events: none;
+  animation: pulseBorder 8s infinite alternate;
+  z-index: 1;
+}
+
+.board-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at center, transparent 98%, rgba(148, 163, 184, 0.1) 99%),
+    repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(148, 163, 184, 0.05) 30px),
+    repeating-linear-gradient(90deg, transparent, transparent 29px, rgba(148, 163, 184, 0.05) 30px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.stone {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+  z-index: 5;
+}
+
+.stone:hover {
+  transform: scale(1.15);
+  z-index: 10;
+}
+
+.stone-glow {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.player-0 {
+  background: linear-gradient(135deg, #6e8efb 0%, #5563de 100%);
+  box-shadow: 
+    0 5px 15px rgba(110, 142, 251, 0.4),
+    0 0 5px rgba(110, 142, 251, 0.2),
+    inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.player-0 .stone-glow {
+  box-shadow: 0 0 20px rgba(110, 142, 251, 0.6);
+}
+
+.player-1 {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  box-shadow: 
+    0 5px 15px rgba(246, 211, 101, 0.4),
+    0 0 5px rgba(246, 211, 101, 0.2),
+    inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.player-1 .stone-glow {
+  box-shadow: 0 0 20px rgba(246, 211, 101, 0.6);
+}
+
+.ghost-stone {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.valid-placement {
+  opacity: 0.8;
+  border: 2px solid rgba(72, 187, 120, 0.7);
+}
+
+.invalid-placement {
+  opacity: 0.5;
+  border: 2px solid rgba(237, 100, 100, 0.7);
+}
+
+.clustering {
+  animation: cluster-pulse 0.7s ease-in-out;
+  z-index: 20;
+}
+
+@keyframes pulseBorder {
+  0% {
+    box-shadow: 0 0 10px rgba(148, 163, 184, 0.2);
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(148, 163, 184, 0.3);
+    border-color: rgba(148, 163, 184, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(148, 163, 184, 0.2);
+    border-color: rgba(148, 163, 184, 0.3);
+  }
+}
+
+@keyframes cluster-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .game-board-2d {
+    width: 320px;
+    height: 320px;
+    box-shadow: 
+      0 0 20px rgba(0, 0, 0, 0.3),
+      inset 0 0 10px rgba(255, 255, 255, 0.1);
+  }
+  
+  .board-boundary {
+    border-width: 1px;
+  }
+  
+  .stone {
+    width: 30px;
+    height: 30px;
+  }
 } 

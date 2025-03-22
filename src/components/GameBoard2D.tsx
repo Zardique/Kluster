@@ -1,10 +1,10 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Stone, Player } from '../types';
 import './GameBoard2D.css';
 
 // Constants for the game
 const STONE_RADIUS = 25;
-const CLUSTER_THRESHOLD = STONE_RADIUS * 2; // Distance for clustering
+const CLUSTER_THRESHOLD = STONE_RADIUS * 1.8; // Reduced threshold for more accurate clustering
 
 interface GameBoardProps {
   stones: Stone[];
@@ -39,51 +39,75 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
   // Track stones that are being clustered for animation
   const [clusteringStones, setClusteringStones] = useState<string[]>([]);
   
-  // Check for clustering periodically
-  useEffect(() => {
+  // Check for clustering based on distance
+  const checkClustering = useCallback(() => {
     if (gameOver) return;
     
-    const checkClustering = () => {
-      const clusteredIds: string[] = [];
+    // Reference to store pairs of potentially clustering stones
+    const potentialClusters: Map<string, Set<string>> = new Map();
+    const clusteringThreshold = STONE_RADIUS * 1.8; // Slightly less than diameter for more accurate detection
+    
+    // Check each pair of stones
+    for (let i = 0; i < visibleStones.length; i++) {
+      const stone1 = visibleStones[i];
       
-      // Check each pair of stones for clustering
-      for (let i = 0; i < visibleStones.length; i++) {
-        for (let j = i + 1; j < visibleStones.length; j++) {
-          const stoneA = visibleStones[i];
-          const stoneB = visibleStones[j];
+      for (let j = i + 1; j < visibleStones.length; j++) {
+        const stone2 = visibleStones[j];
+        
+        // Only check clustering for stones of the same player
+        if (stone1.player.id !== stone2.player.id) continue;
+        
+        // Calculate distance between stones
+        const dx = stone1.x - stone2.x;
+        const dy = stone1.y - stone2.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If stones are close enough to cluster
+        if (distance < clusteringThreshold) {
+          console.log(`Stones ${stone1.id} and ${stone2.id} are clustering. Distance: ${distance}`);
           
-          const dx = stoneB.x - stoneA.x;
-          const dy = stoneB.y - stoneA.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance < CLUSTER_THRESHOLD) {
-            if (!clusteredIds.includes(stoneA.id)) {
-              clusteredIds.push(stoneA.id);
-            }
-            if (!clusteredIds.includes(stoneB.id)) {
-              clusteredIds.push(stoneB.id);
-            }
+          // Add to potential clusters map
+          const playerId = stone1.player.id.toString();
+          if (!potentialClusters.has(playerId)) {
+            potentialClusters.set(playerId, new Set());
           }
+          
+          potentialClusters.get(playerId)?.add(stone1.id);
+          potentialClusters.get(playerId)?.add(stone2.id);
         }
       }
-      
-      // Notify about clustered stones
-      if (clusteredIds.length > 0) {
-        // Apply clustering animation first
-        setClusteringStones(clusteredIds);
-        
-        // Wait for animation to complete before notifying
-        setTimeout(() => {
-          onCluster(clusteredIds);
-          // Clear the clustering stones after animation completes
-          setClusteringStones([]);
-        }, 500); // Match animation duration in CSS
-      }
-    };
+    }
     
-    // Check once on mount and when stones change
-    checkClustering();
+    // Process potential clusters
+    potentialClusters.forEach((stoneIds, playerId) => {
+      if (stoneIds.size >= 2) {
+        // Convert Set to Array for the callback
+        const clusteringStoneIds = Array.from(stoneIds);
+        console.log(`Notifying clustering for player ${playerId}, stones:`, clusteringStoneIds);
+        
+        // Set clustering animation state
+        setClusteringStones(clusteringStoneIds);
+        
+        // Notify clustering after a short delay to show the animation
+        setTimeout(() => {
+          onCluster(clusteringStoneIds);
+          // Reset clustering animation state
+          setClusteringStones([]);
+        }, 600);
+      }
+    });
+    
   }, [visibleStones, gameOver, onCluster]);
+
+  // Check for clustering after stones are placed or moved
+  useEffect(() => {
+    // Use a slight delay to allow rendering to complete
+    const timeoutId = setTimeout(() => {
+      checkClustering();
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [visibleStones, checkClustering]);
   
   // Handle mouse events for stone placement
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -307,6 +331,9 @@ const GameBoard2D: React.FC<GameBoardProps> = ({
     >
       {/* Board background */}
       <div className="board-background"></div>
+      
+      {/* Add subtle grid for visual reference */}
+      <div className="board-grid"></div>
       
       {/* Board boundary circle */}
       <div className="board-boundary"></div>
